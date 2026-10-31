@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- A folder's words and tags written in place: `ShareController`'s actions `description`, `tag_add`,
+  `tag_remove` (who sees it kept) and `tag_color`; a tag's colour, `Share\TagColors` (the one chosen,
+  under the setting `app.drive.tag_colors`, otherwise one of eight drawn from its key), and the Twig
+  function `drive_tag_color()`. Renaming the folder one is in leads to it under its new name.
 - The drive, out of the copies meyers and glitchr each had (« le Partage », « Cloud »), their
   union in one place: `Share\FileShare` (paths, listing, audiences and tags by inheritance, listed,
   each person's own root - `tops()` -, the search through the tree - `search()`, case and accents

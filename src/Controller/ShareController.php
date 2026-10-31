@@ -8,6 +8,7 @@ use Base\Drive\Entity\ShareTask;
 use Base\Drive\People\PeopleInterface;
 use Base\Drive\Security\Voter\ShareVoter;
 use Base\Drive\Share\FileShare;
+use Base\Drive\Share\TagColors;
 use Base\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -49,6 +50,7 @@ class ShareController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly PeopleInterface $people,
         private readonly Audiences $audiences,
+        private readonly TagColors $tagColors,
         #[Autowire('%drive.user_class%')] private readonly string $userClass = 'App\Entity\User',
         #[Autowire('%drive.zip_name%')] private readonly string $zipName = 'drive',
         #[Autowire('%drive.listed_root%')] private readonly bool $listedRoot = false,
@@ -266,9 +268,31 @@ class ShareController extends AbstractController
                         ? $this->share->move($target, \dirname($target) === '.' ? '' : \dirname($target), (string) $request->request->get('name'))
                         : $this->share->move($target, $this->normalize((string) $request->request->get('destination')));
                     $this->addFlash('success', $this->trans('share.flash.moved', ['name' => basename($moved)]));
+                    // The folder shown renamed or moved itself: back to it, at its new path.
+                    if ($target === $path) {
+                        $back = $moved;
+                    }
                 } catch (\InvalidArgumentException) {
                     $this->addFlash('warning', $this->trans('share.flash.not_moved'));
                 }
+                break;
+            // One thing said of the folder at a time (edited in place on the page), the rest kept as it is.
+            case 'description':
+                $this->share->describe($path, $this->share->row($path)?->getAudience(), (string) $request->request->get('description'));
+                $this->addFlash('success', $this->trans('share.flash.described'));
+                break;
+            case 'tag_add':
+            case 'tag_remove':
+                $tags = $this->share->row($path)?->getTags() ?? [];
+                $named = array_filter(array_map('trim', explode(',', (string) $request->request->get('tag'))));
+                $tags = 'tag_add' === $action
+                    ? array_merge($tags, $named)
+                    : array_values(array_filter($tags, fn (string $tag) => !\in_array(FileShare::tagKey($tag), array_map(FileShare::tagKey(...), $named), true)));
+                $this->share->describe($path, $this->share->row($path)?->getAudience(), $this->share->row($path)?->getDescription(), $tags);
+                break;
+            case 'tag_color':
+                // A tag's colour, the same everywhere it is shown; none gives it back its own.
+                $this->tagColors->choose((string) $request->request->get('tag'), $request->request->get('color') ?: null);
                 break;
             case 'workspace_create':
                 try {
