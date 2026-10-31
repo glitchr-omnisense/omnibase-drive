@@ -1,0 +1,66 @@
+{
+    "name": "omnibase/drive",
+    "type": "symfony-bundle",
+    "description": "The drive application for omnibase: a site's own cloud of folders and files - who each folder is for, sharing by name, workspaces with their tasks, search, previews, zips, download counts - on the site's storage or its Google Drive",
+    "keywords": [
+        "symfony",
+        "drive",
+        "cloud",
+        "file-sharing",
+        "documents",
+        "google-drive",
+        "flysystem"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marco Meyer",
+            "email": "marco.meyer@glitchr.io"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Base\\Drive\\": "./src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\Base\\Drive\\": "./tests"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "doctrine/doctrine-bundle": "^2.10|^3.0",
+        "doctrine/orm": "^2.15|^3.0",
+        "league/flysystem": "^3.0",
+        "league/flysystem-bundle": "^3.1",
+        "omnisense/omnibase": "3.x-dev || 4.0.*-dev",
+        "symfony/config": "^7.0|^8.0",
+        "symfony/console": "^7.0|^8.0",
+        "symfony/dependency-injection": "^7.0|^8.0",
+        "symfony/http-kernel": "^7.0|^8.0",
+        "symfony/mime": "^7.0|^8.0",
+        "symfony/security-bundle": "^7.0|^8.0",
+        "symfony/string": "^7.0|^8.0"
+    },
+    "require-dev": {
+        "league/flysystem-local": "^3.0",
+        "phpunit/phpunit": "^11.0|^12.0"
+    },
+    "suggest": {
+        "google/apiclient": "The documents on the site's Google Drive, connected from the back office",
+        "masbug/flysystem-google-drive-ext": "The flysystem adapter the Google Drive storage goes through",
+        "omnibase/admin": "The back office's Google Drive page (/admin/drive)",
+        "ext-zip": "A folder downloaded as one zip",
+        "ext-intl": "A search that sets accents aside"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "omnibridge/composer": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

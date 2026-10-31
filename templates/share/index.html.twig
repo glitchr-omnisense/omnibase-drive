@@ -1,0 +1,226 @@
+{% extends 'layout/layout1.html.twig' %}
+
+{#
+ # The drive's page (Base\Drive\Controller\ShareController), plain and unstyled: the site's look is
+ # its own - a site overrides this file in templates/bundles/DriveBundle/share/index.html.twig, or
+ # extends it ('@!Drive/share/index.html.twig') and redefines its blocks. It writes drive-* markup.
+ #
+ # Variables: path, crumbs, parent, entries (each: name, path, directory, size, modified,
+ # extension, audience - an AudienceInterface or null -, tags, tag_keys, own_tags, downloads,
+ # workspace, listed, and in/where in a search), search, query, spaces (someone's own root),
+ # browse (a folder, not a search nor someone's root), row (the SharedPath of this very folder),
+ # audience (who this folder is for), audiences (the choices), readme, listed, filters, tag,
+ # folder_tags, downloads, manage (the staff), zippable, workspace, work, directories, people
+ # (whom to share with, by group), names (user id => name).
+ #}
+{% block title %}{{ path ? (path|split('/')|last) ~ ' · ' : '' }}{{ '@messages.share.title'|trans }}{% endblock %}
+{% block description %}{{ row and row.description ? row.description : '@messages.share.lead'|trans }}{% endblock %}
+
+{% macro size(bytes) %}{% apply spaceless %}
+    {% if bytes is null %}—{% elseif bytes < 1024 %}{{ bytes }} o{% elseif bytes < 1048576 %}{{ (bytes / 1024)|round(1) }} Ko{% elseif bytes < 1073741824 %}{{ (bytes / 1048576)|round(1) }} Mo{% else %}{{ (bytes / 1073741824)|round(1) }} Go{% endif %}
+{% endapply %}{% endmacro %}
+
+{% block content %}
+{% import _self as drive %}
+<div class="drive">
+    {% block drive_header %}
+    <header class="drive-head">
+        <nav class="drive-crumbs" aria-label="{{ '@messages.share.crumbs'|trans }}">
+            <a href="{{ path('app_share') }}">{{ '@messages.share.title'|trans }}</a>
+            {% for crumb in crumbs %} / {% if loop.last %}<strong aria-current="page">{{ crumb.name }}</strong>{% else %}<a href="{{ path('app_share', {path: crumb.path}) }}">{{ crumb.name }}</a>{% endif %}{% endfor %}
+        </nav>
+        <h1>{{ path ? path|split('/')|last : '@messages.share.title'|trans }}</h1>
+        <p class="drive-audience"><i class="{{ audience.icon }}" aria-hidden="true"></i> {{ audience.label|trans }}</p>
+        {% if search %}<p>{{ '@messages.share.results'|trans({count: entries|length, query: search}) }}</p>
+        {% elseif spaces %}<p>{{ '@messages.share.spaces_lead'|trans }}</p>
+        {% elseif row and row.description %}<p>{{ row.description|nl2br }}</p>{% elseif not path %}<p>{{ '@messages.share.lead'|trans }}</p>{% endif %}
+        {% if downloads %}<p>{{ '@messages.share.downloads_total'|trans({count: downloads}) }}</p>{% endif %}
+    </header>
+    {% endblock %}
+
+    {% block drive_toolbar %}
+    <form class="drive-search" method="get" action="{{ path('app_share') }}">
+        <input type="search" name="q" value="{{ query }}" placeholder="{{ '@messages.share.search_everywhere_placeholder'|trans }}" aria-label="{{ '@messages.share.search_everywhere'|trans }}">
+        <button type="submit">{{ '@messages.share.search_everywhere'|trans }}</button>
+    </form>
+    {% if zippable %}<p><a href="{{ path('app_share', {path: path, zip: 1}) }}">{{ '@messages.share.zip'|trans }}</a></p>{% endif %}
+    {% endblock %}
+
+    {% block drive_deposit %}
+    {% if work and not manage and workspace.allowsDeposit %}
+    <form method="post" enctype="multipart/form-data" action="{{ path('app_share_manage', {path: path}) }}" class="drive-deposit">
+        <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="upload">
+        <label>{{ '@messages.share.deposit'|trans }} <input type="file" name="files[]" multiple required></label>
+        <button type="submit">{{ '@messages.share.upload_submit'|trans }}</button>
+    </form>
+    {% endif %}
+    {% endblock %}
+
+    {% block drive_list %}
+    {% if entries|length or parent is not null %}
+    <table class="drive-list">
+        <thead><tr><th scope="col">{{ '@messages.share.name'|trans }}</th><th scope="col">{{ '@messages.share.size'|trans }}</th><th scope="col">{{ '@messages.share.modified'|trans }}</th><th scope="col">{{ '@messages.share.downloads'|trans }}</th>{% if manage %}<th scope="col">{{ '@messages.share.actions'|trans }}</th>{% endif %}</tr></thead>
+        <tbody>
+            {% if parent is not null %}<tr class="drive-parent"><td colspan="{{ manage ? 5 : 4 }}"><a href="{{ path('app_share', {path: parent}) }}">{{ '@messages.share.parent'|trans }}</a></td></tr>{% endif %}
+            {% for entry in entries %}
+            <tr class="{{ entry.directory ? 'is-directory' : 'is-file' }}" data-tags="{{ entry.tag_keys|join(' ') }}">
+                <td>
+                    <a href="{{ path('app_share', {path: entry.path}) }}"{% if not entry.directory %} download{% endif %}>{{ entry.name }}{{ entry.directory ? '/' }}</a>
+                    {% if not entry.directory %} <a href="{{ path('app_share', {path: entry.path, preview: 1}) }}" target="_blank" rel="noopener">{{ '@messages.share.preview'|trans }}</a>{% endif %}
+                    {% if search %} <small>{{ entry.where ? entry.where|join(' / ') : '@messages.share.title'|trans }}</small>{% endif %}
+                    {% if entry.audience %} <small title="{{ entry.audience.label|trans }}"><i class="{{ entry.audience.icon }}" aria-hidden="true"></i></small>{% endif %}
+                    {% for tag in entry.own_tags %} <small class="drive-tag">{{ tag }}</small>{% endfor %}
+                </td>
+                <td>{{ drive.size(entry.size) }}</td>
+                <td>{{ entry.modified ? entry.modified|date('d/m/Y') : '—' }}</td>
+                <td>{{ entry.downloads ?: '' }}</td>
+                {% if manage %}
+                <td>
+                    {% if browse %}
+                    <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="rename"><input type="hidden" name="target" value="{{ entry.path }}">
+                        <input type="text" name="name" value="{{ entry.name }}" required maxlength="180" aria-label="{{ '@messages.share.rename'|trans }}"><button type="submit">{{ '@messages.share.rename_submit'|trans }}</button>
+                    </form>
+                    <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="move"><input type="hidden" name="target" value="{{ entry.path }}">
+                        <select name="destination" aria-label="{{ '@messages.share.move'|trans }}">{% for directory in directories %}<option value="{{ directory }}">/{{ directory }}</option>{% endfor %}</select><button type="submit">{{ '@messages.share.move_submit'|trans }}</button>
+                    </form>
+                    <form method="post" action="{{ path('app_share_manage', {path: path}) }}" onsubmit="return confirm(this.dataset.confirm)" data-confirm="{{ '@messages.share.delete_confirm'|trans({name: entry.name})|e('html_attr') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="delete"><input type="hidden" name="target" value="{{ entry.path }}">
+                        <button type="submit">{{ '@messages.share.delete'|trans }}</button>
+                    </form>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% if not entries|length %}<p class="drive-empty">{{ (search ? '@messages.share.no_result' : '@messages.share.empty')|trans }}</p>{% endif %}
+    {% endblock %}
+
+    {% block drive_readme %}
+    {% if readme %}<section class="drive-readme"><h2>{{ readme.name }}</h2><pre>{{ readme.text }}</pre></section>{% endif %}
+    {% endblock %}
+
+    {% block drive_workspace %}
+    {% if workspace and (work or manage) %}
+    <aside class="drive-workspace" aria-label="{{ '@messages.share.workspace'|trans }}">
+        <h2>{{ '@messages.share.tasks'|trans }} <small>{{ workspace.path }}</small></h2>
+        <ul>
+            {% for task in workspace.tasks %}
+            <li>
+                <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="task_toggle"><input type="hidden" name="task" value="{{ task.id }}">
+                    <button type="submit" aria-pressed="{{ task.done ? 'true' : 'false' }}">{{ (task.done ? '@messages.share.task_undo' : '@messages.share.task_do')|trans }}</button>
+                </form>
+                {% if task.done %}<s>{{ task.title }}</s>{% else %}{{ task.title }}{% endif %}
+                <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="task_delete"><input type="hidden" name="task" value="{{ task.id }}">
+                    <button type="submit">{{ '@messages.share.delete'|trans }}</button>
+                </form>
+            </li>
+            {% else %}
+            <li>{{ '@messages.share.no_task'|trans }}</li>
+            {% endfor %}
+        </ul>
+        <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="task_add">
+            <input type="text" name="title" required maxlength="255" placeholder="{{ '@messages.share.task_placeholder'|trans }}"><button type="submit">{{ '@messages.share.task_add'|trans }}</button>
+        </form>
+        <h2>{{ '@messages.share.members'|trans }}</h2>
+        <ul>
+            {% for member in workspace.members %}<li>{{ names[member.id] ?? member }}</li>{% else %}<li>{{ '@messages.share.no_member'|trans }}</li>{% endfor %}
+        </ul>
+    </aside>
+    {% endif %}
+    {% endblock %}
+
+    {% block drive_manage %}
+    {% if manage and browse %}
+    <section class="drive-manage">
+        <h2>{{ '@messages.share.manage'|trans }}</h2>
+
+        <h3>{{ '@messages.share.access_title'|trans }}</h3>
+        <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="describe">
+            <input type="hidden" name="description" value="{{ row ? row.description }}"><input type="hidden" name="tags" value="{{ row ? row.tags|join(', ') }}">
+            <label>{{ '@messages.share.for'|trans }}
+                <select name="audience">
+                    <option value="">{{ (path ? '@messages.share.inherit' : '@messages.share.inherit_root')|trans }}</option>
+                    {% for choice in audiences %}<option value="{{ choice.key }}"{{ row and row.audience == choice.key ? ' selected' }}>{{ choice.label|trans }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>{{ '@messages.share.listed'|trans }}
+                <select name="listed">
+                    <option value="">{{ '@messages.share.listed_inherit'|trans }}</option>
+                    <option value="1"{{ row and row.listed is same as(true) ? ' selected' }}>{{ '@messages.share.listed_yes'|trans }}</option>
+                    <option value="0"{{ row and row.listed is same as(false) ? ' selected' }}>{{ '@messages.share.listed_no'|trans }}</option>
+                </select>
+            </label>
+            <button type="submit">{{ '@messages.share.describe_submit'|trans }}</button>
+        </form>
+
+        {% if path %}
+        <h3>{{ '@messages.share.people'|trans }}</h3>
+        <ul>
+            {% for member in row and row.workspace ? row.members : [] %}
+            <li>{{ names[member.id] ?? member }} - {{ (row.allowsDeposit ? '@messages.share.can_deposit' : '@messages.share.read_only')|trans }}
+                <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="member_remove"><input type="hidden" name="member" value="{{ member.id }}">
+                    <button type="submit">{{ '@messages.share.member_remove'|trans }}</button>
+                </form>
+            </li>
+            {% else %}
+            <li>{{ '@messages.share.no_people'|trans }}</li>
+            {% endfor %}
+        </ul>
+        <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="share">
+            <label>{{ '@messages.share.share_with'|trans }}
+                <select name="member" required>
+                    <option value="">{{ '@messages.share.share_pick'|trans }}</option>
+                    {% for group, persons in people %}
+                    <optgroup label="{{ ('@messages.share.people_group.' ~ group)|trans }}">{% for id, name in persons %}<option value="{{ id }}">{{ name }}</option>{% endfor %}</optgroup>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><input type="checkbox" name="deposit" value="1"{{ row and row.allowsDeposit ? ' checked' }}> {{ '@messages.share.deposit_allowed'|trans }}</label>
+            <button type="submit">{{ '@messages.share.share_submit'|trans }}</button>
+        </form>
+        {% endif %}
+
+        <h3>{{ '@messages.share.add_title'|trans }}</h3>
+        <form method="post" enctype="multipart/form-data" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="upload">
+            <label>{{ '@messages.share.upload'|trans }} <input type="file" name="files[]" multiple required></label>
+            <button type="submit">{{ '@messages.share.upload_submit'|trans }}</button>
+        </form>
+        <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="mkdir">
+            <label>{{ '@messages.share.mkdir'|trans }} <input type="text" name="name" required maxlength="180" placeholder="{{ '@messages.share.mkdir_placeholder'|trans }}"></label>
+            <button type="submit">{{ '@messages.share.mkdir_submit'|trans }}</button>
+        </form>
+
+        <h3>{{ '@messages.share.about_title'|trans }}</h3>
+        <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="describe">
+            <input type="hidden" name="audience" value="{{ row ? row.audience }}">
+            <label>{{ '@messages.share.description'|trans }} <textarea name="description" rows="3">{{ row ? row.description }}</textarea></label>
+            <label>{{ '@messages.share.tags_field'|trans }} <input type="text" name="tags" value="{{ row ? row.tags|join(', ') }}"></label>
+            <button type="submit">{{ '@messages.share.describe_submit'|trans }}</button>
+        </form>
+
+        {% if path %}
+        <form method="post" action="{{ path('app_share_manage', {path: path}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="workspace">
+            <input type="hidden" name="workspace" value="{{ row and row.workspace ? '' : '1' }}">
+            <button type="submit">{{ (row and row.workspace ? '@messages.share.workspace_off' : '@messages.share.workspace_on')|trans }}</button>
+        </form>
+        {% endif %}
+    </section>
+    {% endif %}
+    {% endblock %}
+</div>
+{% endblock %}
