@@ -59,15 +59,18 @@ class ShareController extends AbstractController
         #[Autowire('%drive.zip_name%')] private readonly string $zipName = 'drive',
         #[Autowire('%drive.listed_root%')] private readonly bool $listedRoot = false,
         #[Autowire('%drive.team_tags%')] private readonly string $teamTags = 'everyone',
+        #[Autowire('%drive.slugs%')] private readonly bool $slugs = false,
     ) {
     }
 
     #[LocalizedRoute('app.share', name: 'app_share', methods: ['GET'], requirements: ['path' => '.*'], defaults: ['path' => ''])]
     public function show(Request $request, string $path = ''): Response
     {
-        $path = $this->normalize($path);
-        if (!$this->share->isDirectory($path) && !$this->share->isFile($path)) {
-            throw $this->createNotFoundException(sprintf('Nothing at "%s" in the drive.', $path));
+        $asked = $this->normalize($path);
+        $path = $this->share->resolve($asked) ?? throw $this->createNotFoundException(sprintf('Nothing at "%s" in the drive.', $asked));
+        // An address by names, with slugs on: redirected to its slugs, the query kept.
+        if ($this->slugs && FileShare::slug($path) !== $asked) {
+            return $this->redirectToRoute('app_share', ['path' => FileShare::slug($path)] + $request->query->all(), Response::HTTP_MOVED_PERMANENTLY);
         }
         // The root, for someone it is not for: their own - the highest folders they see.
         $spaces = '' === $path && null !== $this->getUser() && !$this->isGranted(ShareVoter::VIEW, '');
@@ -91,7 +94,7 @@ class ShareController extends AbstractController
             if ($this->share->weight($path) > FileShare::ZIP_MAX) {
                 $this->addFlash('warning', $this->trans('share.flash.too_large'));
 
-                return $this->redirectToRoute('app_share', ['path' => $path]);
+                return $this->redirectToRoute('app_share', ['path' => $this->address($path)]);
             }
 
             $this->share->countDownload($path);
@@ -216,7 +219,7 @@ class ShareController extends AbstractController
         if (!$this->isCsrfTokenValid('share', (string) $request->request->get('_token'))) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
-        $path = $this->normalize($path);
+        $path = $this->share->resolve($this->normalize($path)) ?? throw $this->createNotFoundException();
         $action = (string) $request->request->get('_action');
         // The tasks: the team and the workspace's people; one's own tags: whoever sees it; everything else: the team.
         $this->denyAccessUnlessGranted(match (true) {
@@ -394,7 +397,7 @@ class ShareController extends AbstractController
                 break;
         }
 
-        return $this->redirectToRoute('app_share', ['path' => $back]);
+        return $this->redirectToRoute('app_share', ['path' => $this->address($back)]);
     }
 
     /** @return \Doctrine\Persistence\ObjectRepository<User> the accounts (drive.user_class) */
@@ -417,6 +420,12 @@ class ShareController extends AbstractController
         }
 
         return null;
+    }
+
+    /** A path as the drive's addresses read it: its slugs (drive.slugs), otherwise itself. */
+    private function address(string $path): string
+    {
+        return $this->slugs ? FileShare::slug($path) : $path;
     }
 
     private function normalize(string $path): string

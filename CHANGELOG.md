@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- Addresses by slugs, `drive.slugs` (false by default): `FileShare::slug()` and `resolve()` (each
+  part by its name or else by its slug, so old addresses still lead there), the Twig filter
+  `drive_slug` on the links of the bundle's page, an address by names redirected (301) to its
+  slugs, the controller's redirects by slugs.
 - Tags apart from access, each kept to whom they belong: `drive.team_tags` (`everyone` by default,
   as before; `team` keeps the team's tags to the team - not shown, filtered nor searched by anyone
   else) and `drive.personal_tags` (false by default): `Entity\PersonalTag` (table

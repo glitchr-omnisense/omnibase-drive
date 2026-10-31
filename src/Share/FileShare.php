@@ -84,6 +84,54 @@ class FileShare
         return mb_substr($name, 0, 180);
     }
 
+    /**
+     * A path as an address reads it (drive.slugs): each part in plain lower-case words joined by
+     * hyphens, a file keeping its extension - "Assemblées générales/2026/Procès-verbal.pdf" is
+     * "assemblees-generales/2026/proces-verbal.pdf". A part with nothing to slug stays as it is.
+     */
+    public static function slug(string $path): string
+    {
+        return implode('/', array_map(static function (string $part): string {
+            $extension = pathinfo($part, \PATHINFO_EXTENSION);
+            $stem = '' !== $extension && preg_match('/^[a-z0-9]{1,8}$/i', $extension) ? substr($part, 0, -\strlen($extension) - 1) : $part;
+            $slug = self::tagKey($stem);
+            if ('' === $slug) {
+                return $part;
+            }
+
+            return $stem === $part ? $slug : $slug.'.'.strtolower($extension);
+        }, '' === $path ? [] : explode('/', $path)));
+    }
+
+    /**
+     * The path an address leads to: each part the item of that name, or else the first of its
+     * folder whose slug it is - so that an address by names, as before, and one by slugs both
+     * lead there. Null when nothing does.
+     */
+    public function resolve(string $path): ?string
+    {
+        $at = '';
+        foreach ('' === $path ? [] : explode('/', $path) as $part) {
+            $next = ltrim($at.'/'.$part, '/');
+            if (!$this->storage->fileExists($next) && !$this->storage->directoryExists($next)) {
+                $next = null;
+                /** @var StorageAttributes $item */
+                foreach ($this->storage->listContents($at, false) as $item) {
+                    if (!str_starts_with(basename($item->path()), '.') && self::slug(basename($item->path())) === $part) {
+                        $next = $item->path();
+                        break;
+                    }
+                }
+                if (null === $next) {
+                    return null;
+                }
+            }
+            $at = $next;
+        }
+
+        return $at;
+    }
+
     public function isDirectory(string $path): bool
     {
         return '' === $path || $this->storage->directoryExists($path);

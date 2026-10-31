@@ -27,6 +27,8 @@ class DriveConfiguration implements ConfigurationInterface
                     ->info('Who sees the team\'s tags on folders and files (and filters or searches by them): "everyone" who sees the folder, or "team" - the team\'s own way of sorting, which nobody else knows of.')->end()
                 ->booleanNode('personal_tags')->defaultFalse()
                     ->info('Whoever is signed in puts tags of their own on the folders they see, to sort them for themselves: nobody else sees them, the team neither (the sharePersonalTag table).')->end()
+                ->booleanNode('slugs')->defaultFalse()
+                    ->info('Addresses by slugs: /cloud/assemblees-generales/2026 rather than /cloud/Assembl%C3%A9es%20g%C3%A9n%C3%A9rales/2026. An address by names still leads there, redirected to its slugs.')->end()
                 ->scalarNode('zip_name')->defaultValue('drive')
                     ->info('The name of a zip of the root, should one be asked for.')->end()
             ->end();
