@@ -40,6 +40,8 @@ share:
   preview: "Preview"
   download: "Download"
   close: "Close"
+  previous: "Previous"
+  next: "Next"
   deposit: "Bring files here"
   workspace_placeholder: "Workspace name"
   drop: "Drop here to upload into “{folder}”"

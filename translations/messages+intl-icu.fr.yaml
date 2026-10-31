@@ -40,6 +40,8 @@ share:
   preview: "Aperçu"
   download: "Télécharger"
   close: "Fermer"
+  previous: "Précédent"
+  next: "Suivant"
   deposit: "Déposer des fichiers ici"
   workspace_placeholder: "Nom de l'espace"
   drop: "Déposez ici pour envoyer dans « {folder} »"
