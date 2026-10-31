@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- Tags apart from access, each kept to whom they belong: `drive.team_tags` (`everyone` by default,
+  as before; `team` keeps the team's tags to the team - not shown, filtered nor searched by anyone
+  else) and `drive.personal_tags` (false by default): `Entity\PersonalTag` (table
+  `sharePersonalTag`), `Share\PersonalTags`, the actions `my_tag_add`, `my_tag_remove` and
+  `my_tag_color` for whoever sees the folder, the Twig function `drive_my_tag_color()`; their rows
+  follow a folder moved and go with one deleted. The page gets `folder_tags` (the team's, when its
+  reader may see them), `my_tags`, `my_own_tags`, `personal_tags`, `team_tags_private`; each entry
+  `my_tags`, its `tags` (to filter by) being the ones its reader sees. `FileShare::search()` takes
+  the tags to find things by (`tagsOf`).
 - A folder's words and tags written in place: `ShareController`'s actions `description`, `tag_add`,
   `tag_remove` (who sees it kept) and `tag_color`; a tag's colour, `Share\TagColors` (the one chosen,
   under the setting `app.drive.tag_colors`, otherwise one of eight drawn from its key), and the Twig

@@ -23,6 +23,10 @@ class DriveConfiguration implements ConfigurationInterface
                     ->info('The flysystem storage the files are on until a Google Drive is connected (and always in the tests).')->end()
                 ->booleanNode('listed_root')->defaultFalse()
                     ->info('The root lists, to whoever is not of the team, only what the team listed (and the workspaces they are of); a search finds only that too. The rest opens by its link.')->end()
+                ->enumNode('team_tags')->values(['everyone', 'team'])->defaultValue('everyone')
+                    ->info('Who sees the team\'s tags on folders and files (and filters or searches by them): "everyone" who sees the folder, or "team" - the team\'s own way of sorting, which nobody else knows of.')->end()
+                ->booleanNode('personal_tags')->defaultFalse()
+                    ->info('Whoever is signed in puts tags of their own on the folders they see, to sort them for themselves: nobody else sees them, the team neither (the sharePersonalTag table).')->end()
                 ->scalarNode('zip_name')->defaultValue('drive')
                     ->info('The name of a zip of the root, should one be asked for.')->end()
             ->end();

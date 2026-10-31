@@ -50,6 +50,7 @@ class FileShare
         private readonly EntityManagerInterface $entityManager,
         private readonly ShareDownloadRepository $downloads,
         #[Autowire('%drive.default_audience%')] private readonly string $defaultAudience = 'staff',
+        private readonly ?PersonalTags $personal = null,
     ) {
     }
 
@@ -117,11 +118,12 @@ class FileShare
      * the whole tree: only what $allowed lets through - what someone sees, and nothing above or
      * beside it. Folders first, then files, each by path; at most $limit.
      *
-     * @param callable(string): bool $allowed
+     * @param callable(string): bool               $allowed
+     * @param (callable(string): list<string>)|null $tagsOf the tags it is found by, when not its own and its folders' (the ones its reader sees)
      *
      * @return list<array<string, mixed>> as entries(), each with its folder ("in")
      */
-    public function search(string $query, callable $allowed, int $limit = 80): array
+    public function search(string $query, callable $allowed, int $limit = 80, ?callable $tagsOf = null): array
     {
         $words = array_filter(explode(' ', self::fold($query)));
         if (!$words) {
@@ -133,7 +135,7 @@ class FileShare
             if (preg_match('#(^|/)\.#', $item->path())) {
                 continue;
             }
-            $haystack = self::fold(basename($item->path()).' '.implode(' ', $this->tags($item->path())));
+            $haystack = self::fold(basename($item->path()).' '.implode(' ', $tagsOf ? $tagsOf($item->path()) : $this->tags($item->path())));
             foreach ($words as $word) {
                 if (!str_contains($haystack, $word)) {
                     continue 2;
@@ -502,6 +504,7 @@ class FileShare
             'UPDATE shareDownload SET path = CONCAT(:to, SUBSTRING(path, :length + 1)) WHERE path = :from OR path LIKE :under',
             ['to' => $to, 'length' => \strlen($from), 'from' => $from, 'under' => addcslashes($from, '%_').'/%'],
         );
+        $this->personal?->moved($from, $to);
         $this->rows = null;
         $this->counts = null;
 
@@ -559,6 +562,7 @@ class FileShare
         }
         $this->entityManager->flush();
         $this->downloads->deleteUnder($path);
+        $this->personal?->deleted($path);
         $this->rows = null;
         $this->counts = null;
     }

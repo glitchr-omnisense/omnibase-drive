@@ -8,6 +8,7 @@ use Base\Drive\Entity\ShareTask;
 use Base\Drive\People\PeopleInterface;
 use Base\Drive\Security\Voter\ShareVoter;
 use Base\Drive\Share\FileShare;
+use Base\Drive\Share\PersonalTags;
 use Base\Drive\Share\TagColors;
 use Base\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
@@ -41,6 +42,8 @@ class ShareController extends AbstractController
 
     /** What a workspace's people do there besides the team: its tasks, and files they bring (a partner's invoices). */
     private const WORK_ACTIONS = ['task_add', 'task_toggle', 'task_delete', 'upload'];
+    /** What whoever sees a folder does there for themselves: their own tags (drive.personal_tags). */
+    private const OWN_ACTIONS = ['my_tag_add', 'my_tag_remove', 'my_tag_color'];
     /** A search: at least this many letters. */
     private const SEARCH_MIN = 2;
 
@@ -51,9 +54,11 @@ class ShareController extends AbstractController
         private readonly PeopleInterface $people,
         private readonly Audiences $audiences,
         private readonly TagColors $tagColors,
+        private readonly PersonalTags $personalTags,
         #[Autowire('%drive.user_class%')] private readonly string $userClass = 'App\Entity\User',
         #[Autowire('%drive.zip_name%')] private readonly string $zipName = 'drive',
         #[Autowire('%drive.listed_root%')] private readonly bool $listedRoot = false,
+        #[Autowire('%drive.team_tags%')] private readonly string $teamTags = 'everyone',
     ) {
     }
 
@@ -95,11 +100,14 @@ class ShareController extends AbstractController
         }
 
         $visible = fn (string $at) => $this->isGranted(ShareVoter::VIEW, $at);
+        // The tags someone sees: the team's (unless they are the team's alone, drive.team_tags), then their own.
+        $teamTags = 'everyone' === $this->teamTags || $this->isGranted(ShareVoter::MANAGE);
+        $tagsOf = fn (string $at) => $this->union($teamTags ? $this->share->tags($at) : [], $this->personalTags->tags($at));
         // A search goes through every folder, and finds only what its reader sees.
         $query = trim((string) $request->query->get('q', ''));
         $search = mb_strlen($query) >= self::SEARCH_MIN ? $query : null;
         $entries = match (true) {
-            null !== $search => $this->share->search($search, $visible),
+            null !== $search => $this->share->search($search, $visible, tagsOf: $tagsOf),
             $spaces => $this->share->tops($visible),
             default => array_values(array_filter($this->share->entries($path), fn (array $entry) => $visible($entry['path']))),
         };
@@ -129,6 +137,9 @@ class ShareController extends AbstractController
         // The tags to filter this folder by: its entries' - not the folder's own, which they all inherit.
         $filters = [];
         foreach ($entries as &$listed) {
+            $listed['tags'] = $tagsOf($listed['path']);
+            $listed['own_tags'] = $teamTags ? $listed['own_tags'] : [];
+            $listed['my_tags'] = $this->personalTags->own($listed['path']);
             $listed['tag_keys'] = array_map(FileShare::tagKey(...), $listed['tags']);
         }
         unset($listed);
@@ -138,7 +149,7 @@ class ShareController extends AbstractController
                 ++$filters[FileShare::tagKey($tag)]['count'];
             }
         }
-        $inherited = array_map(FileShare::tagKey(...), $this->share->tags($path));
+        $inherited = array_map(FileShare::tagKey(...), $tagsOf($path));
         $filters = array_diff_key($filters, array_flip($inherited));
         uasort($filters, fn (array $a, array $b) => strnatcasecmp($a['label'], $b['label']));
         $crumbs = [];
@@ -170,7 +181,13 @@ class ShareController extends AbstractController
             'listed' => $this->share->listed($path),
             'filters' => $browse ? $filters : [],
             'tag' => (string) $request->query->get('tag', ''),
-            'folder_tags' => $this->share->tags($path),
+            'folder_tags' => $teamTags ? $this->share->tags($path) : [],
+            // The team's tags theirs alone (drive.team_tags: team): the page says so to the team.
+            'team_tags_private' => 'team' === $this->teamTags,
+            // Tags of one's own (drive.personal_tags): the folder's and its folders', and its own.
+            'personal_tags' => $this->personalTags->enabled(),
+            'my_tags' => $this->personalTags->tags($path),
+            'my_own_tags' => $this->personalTags->own($path),
             // The whole drive's total: the team's to see.
             'downloads' => '' === $path && !$this->isGranted(ShareVoter::MANAGE) ? 0 : $this->share->downloads($path),
             'manage' => $this->isGranted(ShareVoter::MANAGE),
@@ -201,8 +218,15 @@ class ShareController extends AbstractController
         }
         $path = $this->normalize($path);
         $action = (string) $request->request->get('_action');
-        // The tasks: the team and the workspace's people; everything else: the team.
-        $this->denyAccessUnlessGranted(\in_array($action, self::WORK_ACTIONS, true) ? ShareVoter::WORK : ShareVoter::MANAGE, $path);
+        // The tasks: the team and the workspace's people; one's own tags: whoever sees it; everything else: the team.
+        $this->denyAccessUnlessGranted(match (true) {
+            \in_array($action, self::WORK_ACTIONS, true) => ShareVoter::WORK,
+            \in_array($action, self::OWN_ACTIONS, true) => ShareVoter::VIEW,
+            default => ShareVoter::MANAGE,
+        }, $path);
+        if (\in_array($action, self::OWN_ACTIONS, true) && !$this->personalTags->enabled()) {
+            throw $this->createAccessDeniedException('No tags of one\'s own here.');
+        }
         // Its people bring files only where the team let them; elsewhere they read.
         if ('upload' === $action && !$this->isGranted(ShareVoter::MANAGE) && !$this->share->workspace($path)?->allowsDeposit()) {
             throw $this->createAccessDeniedException('Read only.');
@@ -293,6 +317,16 @@ class ShareController extends AbstractController
             case 'tag_color':
                 // A tag's colour, the same everywhere it is shown; none gives it back its own.
                 $this->tagColors->choose((string) $request->request->get('tag'), $request->request->get('color') ?: null);
+                break;
+            // One's own tags: nobody else sees them, the team neither.
+            case 'my_tag_add':
+                $this->personalTags->add($path, explode(',', (string) $request->request->get('tag')));
+                break;
+            case 'my_tag_remove':
+                $this->personalTags->remove($path, explode(',', (string) $request->request->get('tag')));
+                break;
+            case 'my_tag_color':
+                $this->personalTags->choose((string) $request->request->get('tag'), $request->request->get('color') ?: null);
                 break;
             case 'workspace_create':
                 try {
@@ -442,5 +476,21 @@ class ShareController extends AbstractController
     private function trans(string $key, array $parameters = []): string
     {
         return $this->translator->trans('@messages.'.$key, $parameters);
+    }
+
+    /**
+     * @param list<string> $first
+     * @param list<string> $then
+     *
+     * @return list<string> both, each tag once (whatever its case or accents)
+     */
+    private function union(array $first, array $then): array
+    {
+        $tags = [];
+        foreach ([...$first, ...$then] as $tag) {
+            $tags[FileShare::tagKey($tag)] ??= $tag;
+        }
+
+        return array_values($tags);
     }
 }

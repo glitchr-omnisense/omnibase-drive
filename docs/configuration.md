@@ -14,6 +14,8 @@ drive:
     default_audience: staff
     local_storage:    local.share
     listed_root:      false
+    team_tags:        everyone
+    personal_tags:    false
     zip_name:         drive
 ```
 
@@ -24,6 +26,8 @@ drive:
 | `default_audience` | `staff` | `FileShare::audience()`: who a path is for when neither it nor a folder above it says - `staff` keeps everything private until a folder is opened, `readers` opens the drive to everyone |
 | `local_storage` | `local.share` | `Storage\DocumentsStorage`: the flysystem storage the files are on until a Google Drive is connected, and always in the tests |
 | `listed_root` | `false` | `ShareController`: the root lists, to whoever is not of the team, only what the team listed and the workspaces they are of, and a search finds only that; the rest opens by its link (a studio's public drive) |
+| `team_tags` | `everyone` | `ShareController`: who sees the team's tags on folders and files, and filters or finds things by them - `everyone` who sees the folder (a public drive's categories), or `team`: the team's own way of sorting, which nobody else knows of |
+| `personal_tags` | `false` | `Share\PersonalTags`: whoever is signed in puts tags of their own on the folders they see (`my_tag_add`, `my_tag_remove`, `my_tag_color`), nobody else seeing them, the team neither; they need the `sharePersonalTag` table (a migration in the site) |
 | `zip_name` | `drive` | the name of a zip of the root |
 
 Each option is also a container parameter (`%drive.default_audience%`...).

@@ -25,7 +25,13 @@ final class TagColors
     {
         $key = FileShare::tagKey($tag);
 
-        return $this->chosen()[$key] ?? self::PALETTE[crc32($key) % \count(self::PALETTE)];
+        return $this->chosen()[$key] ?? self::drawn($tag);
+    }
+
+    /** The colour a tag has before anyone chooses: one of the palette, drawn from its name. */
+    public static function drawn(string $tag): string
+    {
+        return self::PALETTE[crc32(FileShare::tagKey($tag)) % \count(self::PALETTE)];
     }
 
     /** The colour chosen for a tag (#rrggbb), or none to give it back its own. */
