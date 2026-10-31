@@ -55,7 +55,9 @@ bring files (`FileShare::shareWith()`, `isSharedWith()`).
 ## Listed or not
 
 A folder listed is shown on the root and open to search engines; not listed (the default), its
-pages and files answer `X-Robots-Tag: noindex` and open by their link only.
+pages and files answer `X-Robots-Tag: noindex`. With `drive.listed_root`, the root and the search show
+whoever is not of the team only what is listed (and the workspaces they are of): the rest opens by
+its link only.
 
 ## Downloads
 

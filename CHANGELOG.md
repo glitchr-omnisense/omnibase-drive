@@ -24,5 +24,7 @@
   (`Tree\TreeInterface`, `Tree\DocumentsTree`).
 - Plain, unstyled templates of blocks (`@Drive/share/index.html.twig`,
   `@Drive/admin/drive.html.twig`) for the sites to override.
-- Configuration: `drive.user_class`, `staff_role`, `default_audience`, `local_storage`, `zip_name`.
+- Configuration: `drive.user_class`, `staff_role`, `default_audience`, `local_storage`, `zip_name`,
+  `listed_root` (glitchr's root: only what the team listed, and the workspaces one is of, to whoever
+  is not of the team - and so in a search; the rest by its link).
 - Unit tests with their own bootstrap; `docs/`.

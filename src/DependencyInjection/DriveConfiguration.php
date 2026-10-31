@@ -21,6 +21,8 @@ class DriveConfiguration implements ConfigurationInterface
                     ->info('Who a path is for when neither it nor any folder above it says: "staff" keeps everything private until a folder is opened, "readers" opens it to everyone.')->end()
                 ->scalarNode('local_storage')->defaultValue('local.share')
                     ->info('The flysystem storage the files are on until a Google Drive is connected (and always in the tests).')->end()
+                ->booleanNode('listed_root')->defaultFalse()
+                    ->info('The root lists, to whoever is not of the team, only what the team listed (and the workspaces they are of); a search finds only that too. The rest opens by its link.')->end()
                 ->scalarNode('zip_name')->defaultValue('drive')
                     ->info('The name of a zip of the root, should one be asked for.')->end()
             ->end();

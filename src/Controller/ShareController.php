@@ -51,6 +51,7 @@ class ShareController extends AbstractController
         private readonly Audiences $audiences,
         #[Autowire('%drive.user_class%')] private readonly string $userClass = 'App\Entity\User',
         #[Autowire('%drive.zip_name%')] private readonly string $zipName = 'drive',
+        #[Autowire('%drive.listed_root%')] private readonly bool $listedRoot = false,
     ) {
     }
 
@@ -101,6 +102,11 @@ class ShareController extends AbstractController
             default => array_values(array_filter($this->share->entries($path), fn (array $entry) => $visible($entry['path']))),
         };
         $browse = null === $search && !$spaces;
+        // A drive whose root lists only what the team listed (drive.listed_root): on its root, and in a
+        // search, the rest opens by its link only - but for the workspaces one is of. The team sees it all.
+        if ($this->listedRoot && ('' === $path || null !== $search) && !$this->isGranted(ShareVoter::MANAGE)) {
+            $entries = array_values(array_filter($entries, fn (array $entry) => $entry['listed'] || $this->isGranted(ShareVoter::WORK, $entry['path'])));
+        }
         // Where a result is, said through the folders its reader sees only: not the ones above their space.
         foreach ($entries as &$found) {
             $at = '';
