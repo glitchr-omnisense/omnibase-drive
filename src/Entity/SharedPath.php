@@ -61,6 +61,11 @@ class SharedPath
     #[ORM\JoinTable(name: 'sharedPathMember')]
     private Collection $members;
 
+    /** @var Collection<int, ShareGroup> the groups it is shared with: each one's people are among its people */
+    #[ORM\ManyToMany(targetEntity: ShareGroup::class)]
+    #[ORM\JoinTable(name: 'sharedPathGroup')]
+    private Collection $groups;
+
     /** @var Collection<int, ShareTask> its tasks, in their order */
     #[ORM\OneToMany(targetEntity: ShareTask::class, mappedBy: 'workspace', cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['done' => 'ASC', 'position' => 'ASC', 'id' => 'ASC'])]
@@ -71,6 +76,7 @@ class SharedPath
         $this->path = $path;
         $this->audience = $audience;
         $this->members = new ArrayCollection();
+        $this->groups = new ArrayCollection();
         $this->tasks = new ArrayCollection();
     }
 
@@ -111,9 +117,19 @@ class SharedPath
 
     /** @return Collection<int, User> */
     public function getMembers(): Collection { return $this->members; }
-    public function addMember(User $user): self { if (!$this->hasMember($user)) { $this->members->add($user); } return $this; }
+    public function addMember(User $user): self { if (!$this->members->exists(fn ($k, User $m) => $m === $user || (null !== $m->getId() && $m->getId() === $user->getId()))) { $this->members->add($user); } return $this; }
     public function removeMember(User $user): self { foreach ($this->members->toArray() as $member) { if ($member->getId() === $user->getId()) { $this->members->removeElement($member); } } return $this; }
-    public function hasMember(User $user): bool { return $this->members->exists(fn ($k, User $m) => $m === $user || (null !== $m->getId() && $m->getId() === $user->getId())); }
+    /** One of its people: by name, or through a group it is shared with. */
+    public function hasMember(User $user): bool
+    {
+        return $this->members->exists(fn ($k, User $m) => $m === $user || (null !== $m->getId() && $m->getId() === $user->getId()))
+            || $this->groups->exists(fn ($k, ShareGroup $group) => $group->hasMember($user));
+    }
+
+    /** @return Collection<int, ShareGroup> */
+    public function getGroups(): Collection { return $this->groups; }
+    public function addGroup(ShareGroup $group): self { if (!$this->groups->contains($group)) { $this->groups->add($group); } return $this; }
+    public function removeGroup(ShareGroup $group): self { $this->groups->removeElement($group); return $this; }
 
     /** @return Collection<int, ShareTask> */
     public function getTasks(): Collection { return $this->tasks; }

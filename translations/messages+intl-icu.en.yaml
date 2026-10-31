@@ -108,6 +108,7 @@ share:
     staff: "The team only"
   flash:
     shared: "Shared with {who}."
+    group_created: "Group « {name} » created."
     uploaded: "{count, plural, one {# file uploaded.} other {# files uploaded.}}"
     described: "Folder saved."
     deleted: "“{name}” is deleted."

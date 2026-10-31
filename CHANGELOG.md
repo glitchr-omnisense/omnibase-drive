@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Groups of people to share with at once - a flatshare's tenants, a couple, heirs:
+  `Entity\ShareGroup` (tables `shareGroup`, `shareGroupMember`), `SharedPath::$groups`
+  (`sharedPathGroup`), `FileShare::shareWithGroup()`; whoever is in a group shared with a folder is
+  among its people (`SharedPath::hasMember()`), added later too. The team's actions `group_create`,
+  `group_rename`, `group_member_add`, `group_member_remove`, `group_delete`, `group_unshare`, and
+  `share` with `group:<id>`; the page gets `share_groups`.
 - Addresses by slugs, `drive.slugs` (false by default): `FileShare::slug()` and `resolve()` (each
   part by its name or else by its slug, so old addresses still lead there), the Twig filter
   `drive_slug` on the links of the bundle's page, an address by names redirected (301) to its

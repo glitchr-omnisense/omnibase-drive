@@ -4,6 +4,7 @@ namespace Base\Drive\Controller;
 
 use Base\Attributes\Attribute\Route as LocalizedRoute;
 use Base\Drive\Audience\Audiences;
+use Base\Drive\Entity\ShareGroup;
 use Base\Drive\Entity\ShareTask;
 use Base\Drive\People\PeopleInterface;
 use Base\Drive\Security\Voter\ShareVoter;
@@ -202,7 +203,9 @@ class ShareController extends AbstractController
             // Whom it can be shared with, by name and what they are to the site.
             'people' => $browse && $this->isGranted(ShareVoter::MANAGE) ? $this->people->grouped() : [],
             // A workspace's people by their names, not their identifiers.
-            'names' => $workspace ? $this->people->names() : [],
+            'names' => $workspace || $this->isGranted(ShareVoter::MANAGE) ? $this->people->names() : [],
+            // The groups of people the team named, to share with and to fill.
+            'share_groups' => $browse && $this->isGranted(ShareVoter::MANAGE) ? $this->entityManager->getRepository(ShareGroup::class)->findBy([], ['name' => 'ASC']) : [],
         ]);
         // Not listed: not for search engines either.
         if ('' !== $path && !$this->share->listed($path)) {
@@ -342,8 +345,14 @@ class ShareController extends AbstractController
                 $this->share->setWorkspace($path, (bool) $request->request->get('workspace'));
                 break;
             case 'share':
-                // Shared with someone by name: read only, unless its people may bring files.
-                $user = $this->users()->find((int) $request->request->get('member'));
+                // Shared with someone by name, or with a group ("group:<id>"): read only, unless its people may bring files.
+                $picked = (string) $request->request->get('member');
+                if (str_starts_with($picked, 'group:') && ($group = $this->group(substr($picked, 6)))) {
+                    $this->share->shareWithGroup($path, $group, $request->request->has('deposit') ? true : null);
+                    $this->addFlash('success', $this->trans('share.flash.shared', ['who' => $group->getName()]));
+                    break;
+                }
+                $user = $this->users()->find((int) $picked);
                 if ($user instanceof User) {
                     $this->share->shareWith($path, $user, $request->request->has('deposit') ? true : null);
                     $this->addFlash('success', $this->trans('share.flash.shared', ['who' => (string) $user]));
@@ -377,6 +386,52 @@ class ShareController extends AbstractController
                     $this->entityManager->flush();
                 }
                 break;
+            case 'group_unshare':
+                $workspace = $this->share->workspace($path);
+                if ($workspace && ($group = $this->group($request->request->get('group')))) {
+                    $workspace->removeGroup($group);
+                    $this->entityManager->flush();
+                }
+                break;
+            // The groups of people (a flatshare, a couple...): named, filled, emptied, gone - the team's.
+            case 'group_create':
+                $name = trim((string) $request->request->get('name'));
+                if ('' !== $name) {
+                    $group = new ShareGroup(mb_substr($name, 0, 120));
+                    foreach ((array) $request->request->all('members') as $id) {
+                        if (($user = $this->users()->find((int) $id)) instanceof User) {
+                            $group->addMember($user);
+                        }
+                    }
+                    $this->entityManager->persist($group);
+                    $this->entityManager->flush();
+                    $this->addFlash('success', $this->trans('share.flash.group_created', ['name' => $group->getName()]));
+                }
+                break;
+            case 'group_rename':
+                $name = trim((string) $request->request->get('name'));
+                if ('' !== $name && ($group = $this->group($request->request->get('group')))) {
+                    $group->setName(mb_substr($name, 0, 120));
+                    $this->entityManager->flush();
+                }
+                break;
+            case 'group_member_add':
+            case 'group_member_remove':
+                $user = $this->users()->find((int) $request->request->get('member'));
+                if (($group = $this->group($request->request->get('group'))) && $user instanceof User) {
+                    'group_member_add' === $action ? $group->addMember($user) : $group->removeMember($user);
+                    $this->entityManager->flush();
+                }
+                break;
+            case 'group_delete':
+                if ($group = $this->group($request->request->get('group'))) {
+                    foreach ($this->entityManager->createQuery(sprintf('SELECT p FROM %s p JOIN p.groups g WHERE g = :group', \Base\Drive\Entity\SharedPath::class))->setParameter('group', $group)->getResult() as $shared) {
+                        $shared->removeGroup($group);
+                    }
+                    $this->entityManager->remove($group);
+                    $this->entityManager->flush();
+                }
+                break;
             case 'task_add':
                 $workspace = $this->share->workspace($path);
                 $title = trim((string) $request->request->get('title'));
@@ -401,6 +456,11 @@ class ShareController extends AbstractController
     }
 
     /** @return \Doctrine\Persistence\ObjectRepository<User> the accounts (drive.user_class) */
+    private function group(mixed $id): ?ShareGroup
+    {
+        return is_numeric($id) ? $this->entityManager->find(ShareGroup::class, (int) $id) : null;
+    }
+
     private function users(): \Doctrine\Persistence\ObjectRepository
     {
         return $this->entityManager->getRepository($this->userClass);

@@ -3,6 +3,7 @@
 namespace Base\Drive\Share;
 
 use Base\Drive\Entity\ShareDownload;
+use Base\Drive\Entity\ShareGroup;
 use Base\Drive\Entity\SharedPath;
 use Base\Drive\Repository\ShareDownloadRepository;
 use Base\Drive\Repository\SharedPathRepository;
@@ -492,7 +493,21 @@ class FileShare
         $this->rows = null;
     }
 
-    /** A folder made a workspace, or a workspace made a plain folder again (its people and tasks gone). */
+    /** A folder shared with a group of people (Entity\ShareGroup), as shareWith() is with one person. */
+    public function shareWithGroup(string $path, ShareGroup $group, ?bool $deposit = null): void
+    {
+        $row = $this->row($path) ?? new SharedPath($path, $this->audience($path));
+        $row->setWorkspace(true);
+        $row->addGroup($group);
+        if (null !== $deposit) {
+            $row->setDeposit($deposit);
+        }
+        $this->entityManager->persist($row);
+        $this->entityManager->flush();
+        $this->rows = null;
+    }
+
+    /** A folder made a workspace, or a workspace made a plain folder again (its people, groups and tasks gone). */
     public function setWorkspace(string $path, bool $workspace): void
     {
         $row = $this->row($path) ?? new SharedPath($path, $this->audience($path));
@@ -500,6 +515,9 @@ class FileShare
         if (!$workspace) {
             foreach ($row->getMembers()->toArray() as $member) {
                 $row->removeMember($member);
+            }
+            foreach ($row->getGroups()->toArray() as $group) {
+                $row->removeGroup($group);
             }
             foreach ($row->getTasks()->toArray() as $task) {
                 $row->removeTask($task);

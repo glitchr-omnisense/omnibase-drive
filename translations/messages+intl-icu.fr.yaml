@@ -108,6 +108,7 @@ share:
     staff: "L'équipe seulement"
   flash:
     shared: "Partagé avec {who}."
+    group_created: "Groupe « {name} » créé."
     uploaded: "{count, plural, one {# fichier déposé.} other {# fichiers déposés.}}"
     described: "Dossier enregistré."
     deleted: "« {name} » est supprimé."
