@@ -5,7 +5,9 @@ order: 60
 
 # Commands
 
-Each keeps the name sites knew it by as an alias.
+Each keeps the name sites knew it by as an alias. With the retention lock on (`drive.retention`),
+nothing kept is moved nor replaced: `drive:move` fails, `drive:import` leaves a file of another size
+as it is, says so and ends in failure.
 
 | Command | Alias | Does |
 |---|---|---|

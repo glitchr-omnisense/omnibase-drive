@@ -3,6 +3,7 @@
 namespace Base\Drive\Command;
 
 use Base\Drive\Share\FileShare;
+use Base\Drive\Share\LockedException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -14,7 +15,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * Files and folders of the drive moved into another folder (a workspace, say): what was
  * said of them and their downloads follow. --tags drops their own tags (their new folder's are
- * theirs now).
+ * theirs now). Nothing moves out of a folder the retention lock keeps (drive.retention).
  */
 #[AsCommand(name: 'drive:move', description: 'Files and folders of the drive into another folder', aliases: ['app:share:move'])]
 final class MoveCommand extends Command
@@ -47,7 +48,8 @@ final class MoveCommand extends Command
                 $io->writeln(sprintf('%s -> %s', $from, $to));
                 ++$moved;
             }
-        } catch (\InvalidArgumentException $e) {
+        } catch (\InvalidArgumentException|LockedException $e) {
+            // Out of a folder the retention lock keeps (drive.retention): refused here as on the page.
             $io->error($e->getMessage());
 
             return Command::FAILURE;

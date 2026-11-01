@@ -11,7 +11,10 @@
  # browse (a folder, not a search nor someone's root), row (the SharedPath of this very folder),
  # audience (who this folder is for), audiences (the choices), readme, listed, filters, tag,
  # folder_tags, downloads, manage (the staff), zippable, workspace, work, directories, people
- # (whom to share with, by group), names (user id => name).
+ # (whom to share with, by group), names (user id => name), share_groups (the groups to share with);
+ # the retention lock: retention (on), locked (this folder kept), lift (the RetentionEvent it is open
+ # by, or null), retain (the superadmin, who lifts and puts it back), retention_log (for them) - and
+ # each entry's locked.
  #}
 {% block title %}{{ path ? (path|split('/')|last) ~ ' · ' : '' }}{{ '@messages.share.title'|trans }}{% endblock %}
 {% block description %}{{ row and row.description ? row.description : '@messages.share.lead'|trans }}{% endblock %}
@@ -76,7 +79,8 @@
                 <td>{{ entry.downloads ?: '' }}</td>
                 {% if manage %}
                 <td>
-                    {% if browse %}
+                    {% if browse and entry.locked %}<small class="drive-locked">{{ '@messages.share.retention.kept'|trans }}</small>
+                    {% elseif browse %}
                     <form method="post" action="{{ path('app_share_manage', {path: path|drive_slug}) }}">
                         <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="rename"><input type="hidden" name="target" value="{{ entry.path }}">
                         <input type="text" name="name" value="{{ entry.name }}" required maxlength="180" aria-label="{{ '@messages.share.rename'|trans }}"><button type="submit">{{ '@messages.share.rename_submit'|trans }}</button>
@@ -195,6 +199,16 @@
         <form method="post" enctype="multipart/form-data" action="{{ path('app_share_manage', {path: path|drive_slug}) }}">
             <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="upload">
             <label>{{ '@messages.share.upload'|trans }} <input type="file" name="files[]" multiple required></label>
+            {# Shared on upload: a copy in each person's space (a group: each of its people's), read only unless ticked. #}
+            <label>{{ '@messages.share.upload_share.title'|trans }}
+                <select name="share_with[]" multiple>
+                    {% if share_groups|length %}<optgroup label="{{ '@messages.share.groups'|trans }}">{% for group in share_groups %}<option value="group:{{ group.id }}">{{ group.name }}</option>{% endfor %}</optgroup>{% endif %}
+                    {% for group, persons in people %}
+                    <optgroup label="{{ ('@messages.share.people_group.' ~ group)|trans }}">{% for id, name in persons %}<option value="{{ id }}">{{ name }}</option>{% endfor %}</optgroup>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><input type="checkbox" name="share_deposit" value="1"> {{ '@messages.share.upload_share.deposit'|trans }}</label>
             <button type="submit">{{ '@messages.share.upload_submit'|trans }}</button>
         </form>
         <form method="post" action="{{ path('app_share_manage', {path: path|drive_slug}) }}">
@@ -218,6 +232,50 @@
             <input type="hidden" name="workspace" value="{{ row and row.workspace ? '' : '1' }}">
             <button type="submit">{{ (row and row.workspace ? '@messages.share.workspace_off' : '@messages.share.workspace_on')|trans }}</button>
         </form>
+        {% endif %}
+    </section>
+    {% endif %}
+    {% endblock %}
+
+    {% block drive_retention %}
+    {#
+     # The retention lock: whether this folder is kept; for the superadmin, its lift (until put back,
+     # for a while, until a date) or putting it back, each with its reason, and the log.
+     #}
+    {% if retention and browse and (manage or retain) %}
+    <section class="drive-retention">
+        <h2>{{ '@messages.share.retention.title'|trans }}</h2>
+        {% if lift %}
+        <p>{{ (lift.until ? '@messages.share.retention.lifted_until' : '@messages.share.retention.lifted_open')|trans({until: lift.until ? lift.until|date('d/m/Y H:i') : '', who: lift.userName ?? '—', folder: lift.path ?: '/'}) }}</p>
+        {% else %}
+        <p>{{ '@messages.share.retention.locked'|trans }}</p>
+        {% endif %}
+        {% if retain %}
+        {% if locked %}
+        <form method="post" action="{{ path('app_share_manage', {path: path|drive_slug}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="retention_lift">
+            <label>{{ '@messages.share.retention.reason'|trans }} <input type="text" name="reason" required maxlength="500"></label>
+            <label><input type="radio" name="until" value="open" checked> {{ '@messages.share.retention.until_open'|trans }}</label>
+            <label><input type="radio" name="until" value="duration"> {{ '@messages.share.retention.until_duration'|trans }}
+                <input type="number" name="duration" min="1" value="24"> <select name="unit"><option value="hours">{{ '@messages.share.retention.hours'|trans }}</option><option value="days">{{ '@messages.share.retention.days'|trans }}</option></select></label>
+            <label><input type="radio" name="until" value="date"> {{ '@messages.share.retention.until_date'|trans }} <input type="date" name="date"></label>
+            <button type="submit">{{ '@messages.share.retention.lift'|trans }}</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ path('app_share_manage', {path: path|drive_slug}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('share') }}"><input type="hidden" name="_action" value="retention_lock">
+            <label>{{ '@messages.share.retention.reason'|trans }} <input type="text" name="reason" required maxlength="500"></label>
+            <button type="submit">{{ '@messages.share.retention.lock'|trans }}</button>
+        </form>
+        {% endif %}
+        <h3>{{ '@messages.share.retention.log'|trans }}</h3>
+        <ul class="drive-retention-log">
+            {% for event in retention_log %}
+            <li>{{ event.at|date('d/m/Y H:i') }} · {{ ('@messages.share.retention.action.' ~ event.action)|trans }} · {{ event.path ?: '/' }}{% if event.until %} · {{ '@messages.share.retention.until'|trans({until: event.until|date('d/m/Y H:i')}) }}{% endif %} · {{ event.userName ?? '—' }} · {{ event.reason }}</li>
+            {% else %}
+            <li>{{ '@messages.share.retention.log_empty'|trans }}</li>
+            {% endfor %}
+        </ul>
         {% endif %}
     </section>
     {% endif %}

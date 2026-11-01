@@ -63,6 +63,28 @@ account; a site says who its people are:
 final class People implements PeopleInterface { /* tenants, associates, contractors, team... */ }
 ```
 
+## Its people's spaces
+
+Where a person's space is - the folder a file shared with them on upload goes into:
+`Base\Drive\Space\SpaceProviderInterface::spaceOf(User): ?string`, the path, the folder made if
+missing and shared with them; null for someone who is none of its people. Autoconfigured
+(`drive.space`), asked by priority (`#[AsTaggedItem(priority: ...)]`); nobody answering,
+`drive.spaces_root/<name>`. omnibase/estate's `Drive\EstateSpaces` answers for tenants
+(`Locataires/<name>`), owners under management (`Propriétaires/<name>`) and co-owners
+(`Indivisions/<ownership>`).
+
+The page gets `people` and `share_groups` to offer on upload (`share_with[]`, `share_deposit`, on
+the upload form - meyers ties its checkboxes to it with `form="..."`, and its drop controller sends
+them with each file dropped).
+
+## Its retention lock
+
+The page gets `retention`, `locked` (this folder), `lift` (the `RetentionEvent` it is open by, or
+null), `retain` (the superadmin) and `retention_log`, and each entry `locked` (it, or something it
+holds): hide delete, rename and move on what is locked, and give the superadmin the lift and lock
+forms (`reason`; `until`: `open`, `duration` with `duration` and `unit` - `hours` or `days` -, or
+`date`, `Y-m-d`). The words are `share.retention.*`.
+
 ## Its folders
 
 `Base\Drive\Tree\TreeInterface`: a layout of folders (path => audience key or null) the back office

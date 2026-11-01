@@ -17,6 +17,9 @@ drive:
     team_tags:        everyone
     personal_tags:    false
     slugs:            false
+    spaces_root:      Spaces
+    retention:        false
+    retention_role:   ROLE_SUPERADMIN
     zip_name:         drive
 ```
 
@@ -30,6 +33,9 @@ drive:
 | `team_tags` | `everyone` | `ShareController`: who sees the team's tags on folders and files, and filters or finds things by them - `everyone` who sees the folder (a public drive's categories), or `team`: the team's own way of sorting, which nobody else knows of |
 | `personal_tags` | `false` | `Share\PersonalTags`: whoever is signed in puts tags of their own on the folders they see (`my_tag_add`, `my_tag_remove`, `my_tag_color`), nobody else seeing them, the team neither; they need the `sharePersonalTag` table (a migration in the site) |
 | `slugs` | `false` | `ShareController` and `\|drive_slug`: addresses by slugs, `/cloud/assemblees-generales/2026/proces-verbal.pdf`, a file keeping its extension; an address by names still leads there (`FileShare::resolve()`), redirected (301) to its slugs. A site's template writes its links `path('app_share', {path: entry.path\|drive_slug})` |
+| `spaces_root` | `Spaces` | `Space\Spaces`: the folder a person's space is made in when no provider says where it is (`<spaces_root>/<their name>`); a file shared on upload with them goes there |
+| `retention` | `false` | `Share\Retention`: the retention lock - nothing in the drive deleted, overwritten, renamed nor moved, by anyone, the team included, until the superadmin lifts it for a folder; it needs the `shareRetention` table (a migration in the site) |
+| `retention_role` | `ROLE_SUPERADMIN` | `ShareVoter`'s `SHARE_RETAIN`: who lifts the lock and puts it back |
 | `zip_name` | `drive` | the name of a zip of the root |
 
 Each option is also a container parameter (`%drive.default_audience%`...).
@@ -41,3 +47,4 @@ Each option is also a container parameter (`%drive.default_audience%`...).
 | `Base\Drive\People\PeopleInterface` | `AccountPeople`: every account, one group | `#[AsAlias(PeopleInterface::class)]` on its class |
 | `Base\Drive\Tree\TreeInterface` | none: the back office offers no layout | `#[AsAlias(TreeInterface::class)]` on its class |
 | `Base\Drive\Audience\AudienceInterface` | readers, users, members, staff | any number, autoconfigured (`drive.audience`) |
+| `Base\Drive\Space\SpaceProviderInterface` | none: `drive.spaces_root/<name>` | any number, autoconfigured (`drive.space`), asked by priority - omnibase/estate's `Drive\EstateSpaces` |

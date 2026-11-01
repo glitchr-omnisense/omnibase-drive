@@ -9,8 +9,11 @@ use Base\Drive\Entity\ShareTask;
 use Base\Drive\People\PeopleInterface;
 use Base\Drive\Security\Voter\ShareVoter;
 use Base\Drive\Share\FileShare;
+use Base\Drive\Share\LockedException;
 use Base\Drive\Share\PersonalTags;
+use Base\Drive\Share\Retention;
 use Base\Drive\Share\TagColors;
+use Base\Drive\Space\Spaces;
 use Base\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -30,7 +33,11 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * downloads as a zip (?zip) - never the drive as a whole; a search through every folder (?q);
  * someone the root is not for has a root of their own. Who sees what is ShareVoter's; the staff
  * manage it on the page itself: upload (a dropped folder kept whole), a new folder, who a folder
- * is for, whom it is shared with, a few words on it, move, rename, delete.
+ * is for, whom it is shared with, a few words on it, move, rename, delete. Files added by the team
+ * may be shared at once with named people and groups (share_with[]): a copy in each one's space
+ * (Space\Spaces). With the retention lock on (drive.retention), nothing locked is deleted, renamed
+ * nor moved, and the superadmin lifts a folder's lock and puts it back from its access dialog,
+ * where the log is listed.
  *
  * Its path is the site's: the key app.share of its config/routes_paths.yaml (fr: /cloud/{path}),
  * its route names app_share and app_share_manage. Its page is @Drive/share/index.html.twig, which a
@@ -43,6 +50,8 @@ class ShareController extends AbstractController
 
     /** What a workspace's people do there besides the team: its tasks, and files they bring (a partner's invoices). */
     private const WORK_ACTIONS = ['task_add', 'task_toggle', 'task_delete', 'upload'];
+    /** The retention lock lifted or put back on a folder: the superadmin's (SHARE_RETAIN). */
+    private const RETENTION_ACTIONS = ['retention_lift', 'retention_lock'];
     /** What whoever sees a folder does there for themselves: their own tags (drive.personal_tags). */
     private const OWN_ACTIONS = ['my_tag_add', 'my_tag_remove', 'my_tag_color'];
     /** A search: at least this many letters. */
@@ -56,6 +65,8 @@ class ShareController extends AbstractController
         private readonly Audiences $audiences,
         private readonly TagColors $tagColors,
         private readonly PersonalTags $personalTags,
+        private readonly Retention $retention,
+        private readonly Spaces $spaces,
         #[Autowire('%drive.user_class%')] private readonly string $userClass = 'App\Entity\User',
         #[Autowire('%drive.zip_name%')] private readonly string $zipName = 'drive',
         #[Autowire('%drive.listed_root%')] private readonly bool $listedRoot = false,
@@ -145,6 +156,8 @@ class ShareController extends AbstractController
             $listed['own_tags'] = $teamTags ? $listed['own_tags'] : [];
             $listed['my_tags'] = $this->personalTags->own($listed['path']);
             $listed['tag_keys'] = array_map(FileShare::tagKey(...), $listed['tags']);
+            // Kept by the retention lock (it, or something it holds): not deleted, renamed nor moved.
+            $listed['locked'] = $this->retention->isLockedTree($listed['path']);
         }
         unset($listed);
         foreach ($entries as $entry) {
@@ -206,6 +219,13 @@ class ShareController extends AbstractController
             'names' => $workspace || $this->isGranted(ShareVoter::MANAGE) ? $this->people->names() : [],
             // The groups of people the team named, to share with and to fill.
             'share_groups' => $browse && $this->isGranted(ShareVoter::MANAGE) ? $this->entityManager->getRepository(ShareGroup::class)->findBy([], ['name' => 'ASC']) : [],
+            // The retention lock (drive.retention): whether this folder is kept, the lift it is open by,
+            // and for the superadmin the right to lift and put it back, and the log.
+            'retention' => $this->retention->enabled(),
+            'locked' => $this->retention->isLocked($path),
+            'lift' => $this->retention->lift($path),
+            'retain' => $retain = $browse && $this->isGranted(ShareVoter::RETAIN, $path),
+            'retention_log' => $retain ? $this->retention->log($path) : [],
         ]);
         // Not listed: not for search engines either.
         if ('' !== $path && !$this->share->listed($path)) {
@@ -226,6 +246,7 @@ class ShareController extends AbstractController
         $action = (string) $request->request->get('_action');
         // The tasks: the team and the workspace's people; one's own tags: whoever sees it; everything else: the team.
         $this->denyAccessUnlessGranted(match (true) {
+            \in_array($action, self::RETENTION_ACTIONS, true) => ShareVoter::RETAIN,
             \in_array($action, self::WORK_ACTIONS, true) => ShareVoter::WORK,
             \in_array($action, self::OWN_ACTIONS, true) => ShareVoter::VIEW,
             default => ShareVoter::MANAGE,
@@ -255,8 +276,20 @@ class ShareController extends AbstractController
                 if ($files && !$this->share->isDirectory($into)) {
                     $this->share->createDirectory($into);
                 }
+                $added = [];
                 foreach ($files as $file) {
-                    $this->share->upload($into, $file);
+                    $added[] = $this->share->upload($into, $file);
+                }
+                // Shared on upload with the people and groups the team named: a copy in each one's space.
+                if ($added && $this->isGranted(ShareVoter::MANAGE) && [] !== $recipients = $this->recipients($request->request->all('share_with'))) {
+                    $copies = [];
+                    foreach ($added as $file) {
+                        $copies += $this->spaces->deliver($file, $recipients, $request->request->getBoolean('share_deposit'));
+                    }
+                    $this->addFlash('success', $this->trans('share.flash.delivered', [
+                        'count' => \count(array_unique($copies)),
+                        'who' => implode(', ', array_map(fn ($r) => $r instanceof ShareGroup ? $r->getName() : ($this->people->names()[$r->getId()] ?? (string) $r), $recipients)),
+                    ]));
                 }
                 // Too large for the server (or none arrived): said so - to the page dropping them, by its status.
                 if (\count($files) < \count($sent) || ([] === $sent && $request->isXmlHttpRequest())) {
@@ -286,6 +319,11 @@ class ShareController extends AbstractController
             case 'delete':
                 $target = $this->normalize((string) $request->request->get('target'));
                 if ('' !== $target && (str_starts_with($target, ltrim($path.'/', '/')) || '' === $path)) {
+                    // Kept by the retention lock: refused, the team included (FileShare refuses it too).
+                    if (!$this->isGranted(ShareVoter::ALTER, $target)) {
+                        $this->addFlash('warning', $this->trans('share.flash.locked', ['name' => basename($target)]));
+                        break;
+                    }
                     $this->share->delete($target);
                     $this->addFlash('success', $this->trans('share.flash.deleted', ['name' => basename($target)]));
                 }
@@ -294,6 +332,9 @@ class ShareController extends AbstractController
             case 'rename':
                 try {
                     $target = $this->normalize((string) $request->request->get('target'));
+                    if (!$this->isGranted(ShareVoter::ALTER, $target)) {
+                        throw new LockedException($target);
+                    }
                     $moved = 'rename' === $action
                         ? $this->share->move($target, \dirname($target) === '.' ? '' : \dirname($target), (string) $request->request->get('name'))
                         : $this->share->move($target, $this->normalize((string) $request->request->get('destination')));
@@ -302,8 +343,27 @@ class ShareController extends AbstractController
                     if ($target === $path) {
                         $back = $moved;
                     }
+                } catch (LockedException $e) {
+                    $this->addFlash('warning', $this->trans('share.flash.locked', ['name' => basename($e->path)]));
                 } catch (\InvalidArgumentException) {
                     $this->addFlash('warning', $this->trans('share.flash.not_moved'));
+                }
+                break;
+            // The retention lock: lifted for this folder - until put back, for a while, or until a date -, or put back; each logged with its reason.
+            case 'retention_lift':
+                try {
+                    $this->retention->liftFor($path, $this->user(), (string) $request->request->get('reason'), $this->until($request));
+                    $this->addFlash('success', $this->trans('share.flash.lifted', ['name' => '' === $path ? $this->trans('share.title') : basename($path)]));
+                } catch (\InvalidArgumentException) {
+                    $this->addFlash('warning', $this->trans('share.flash.retention_invalid'));
+                }
+                break;
+            case 'retention_lock':
+                try {
+                    $this->retention->lock($path, $this->user(), (string) $request->request->get('reason'));
+                    $this->addFlash('success', $this->trans('share.flash.relocked', ['name' => '' === $path ? $this->trans('share.title') : basename($path)]));
+                } catch (\InvalidArgumentException) {
+                    $this->addFlash('warning', $this->trans('share.flash.retention_invalid'));
                 }
                 break;
             // One thing said of the folder at a time (edited in place on the page), the rest kept as it is.
@@ -453,6 +513,53 @@ class ShareController extends AbstractController
         }
 
         return $this->redirectToRoute('app_share', ['path' => $this->address($back)]);
+    }
+
+    /**
+     * Whom files are shared with on upload: accounts by id, groups as "group:<id>"; what is not
+     * found left out.
+     *
+     * @param array<mixed> $picked
+     *
+     * @return list<User|ShareGroup>
+     */
+    private function recipients(array $picked): array
+    {
+        $recipients = [];
+        foreach (array_unique(array_map('strval', $picked)) as $one) {
+            $found = str_starts_with($one, 'group:') ? $this->group(substr($one, 6)) : (ctype_digit($one) ? $this->users()->find((int) $one) : null);
+            if ($found instanceof User || $found instanceof ShareGroup) {
+                $recipients[] = $found;
+            }
+        }
+
+        return $recipients;
+    }
+
+    /**
+     * A lift's end, as posted: "open" (until put back - the default), "duration" (a number of
+     * hours or days from now), "date" (to the end of that day).
+     *
+     * @throws \InvalidArgumentException a duration or a date that does not read
+     */
+    private function until(Request $request): ?\DateTimeImmutable
+    {
+        $now = $this->retention->now();
+
+        return match ((string) $request->request->get('until', 'open')) {
+            'duration' => ($amount = $request->request->getInt('duration')) > 0
+                ? $now->modify(sprintf('+%d %s', $amount, 'hours' === $request->request->get('unit') ? 'hours' : 'days'))
+                : throw new \InvalidArgumentException('A duration of at least one.'),
+            'date' => (\DateTimeImmutable::createFromFormat('!Y-m-d', (string) $request->request->get('date'), $now->getTimezone()) ?: throw new \InvalidArgumentException('A date.'))->modify('+1 day'),
+            default => null,
+        };
+    }
+
+    private function user(): ?User
+    {
+        $user = $this->getUser();
+
+        return $user instanceof User ? $user : null;
     }
 
     /** @return \Doctrine\Persistence\ObjectRepository<User> the accounts (drive.user_class) */

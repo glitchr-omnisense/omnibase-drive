@@ -31,6 +31,10 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  *
  * Paths are relative to the drive's root, "/"-separated, without slashes at their ends
  * ("" is the root). Names beginning with a dot (.git, .htaccess) are never listed nor served.
+ *
+ * With the retention lock on (drive.retention, Base\Drive\Share\Retention), what a locked folder
+ * holds is neither deleted, overwritten, renamed nor moved here (LockedException), whoever asks:
+ * the page, the commands and the bundles writing into the drive all come through these methods.
  */
 class FileShare
 {
@@ -52,6 +56,7 @@ class FileShare
         private readonly ShareDownloadRepository $downloads,
         #[Autowire('%drive.default_audience%')] private readonly string $defaultAudience = 'staff',
         private readonly ?PersonalTags $personal = null,
+        private readonly ?Retention $retention = null,
     ) {
     }
 
@@ -402,6 +407,12 @@ class FileShare
         $this->rows = null;
     }
 
+    /** Kept by the retention lock (drive.retention): neither deleted, overwritten, renamed nor moved. */
+    public function isLocked(string $path): bool
+    {
+        return (bool) $this->retention?->isLocked($path);
+    }
+
     public function createDirectory(string $path): void
     {
         $this->storage->createDirectory($path);
@@ -410,12 +421,7 @@ class FileShare
     /** An uploaded file into a folder, under its own name - beside the one already there, if any ("notes (2).pdf"). */
     public function upload(string $directory, UploadedFile $file): string
     {
-        $name = self::name($file->getClientOriginalName()) ?: 'fichier';
-        $target = ltrim($directory.'/'.$name, '/');
-        for ($n = 2; $this->storage->fileExists($target) || $this->storage->directoryExists($target); ++$n) {
-            $extension = pathinfo($name, \PATHINFO_EXTENSION);
-            $target = ltrim($directory.'/'.pathinfo($name, \PATHINFO_FILENAME).' ('.$n.')'.('' !== $extension ? '.'.$extension : ''), '/');
-        }
+        $target = $this->free($directory, self::name($file->getClientOriginalName()) ?: 'fichier');
         $stream = fopen($file->getPathname(), 'r');
         try {
             $this->storage->writeStream($target, $stream);
@@ -423,6 +429,33 @@ class FileShare
             if (\is_resource($stream)) {
                 fclose($stream);
             }
+        }
+
+        return $target;
+    }
+
+    /** A file of the drive copied into a folder, under its own name - beside one already there, never over it; its new path. */
+    public function copy(string $file, string $directory): string
+    {
+        if (!$this->isFile($file)) {
+            throw new \InvalidArgumentException(sprintf('"%s" is no file of the drive.', $file));
+        }
+        if (!$this->isDirectory($directory)) {
+            $this->storage->createDirectory($directory);
+        }
+        $target = $this->free($directory, basename($file));
+        $this->storage->copy($file, $target);
+
+        return $target;
+    }
+
+    /** A path in a folder for a name: the name itself, or "name (2).ext", "name (3).ext"... while one is there. */
+    private function free(string $directory, string $name): string
+    {
+        $target = ltrim($directory.'/'.$name, '/');
+        for ($n = 2; $this->storage->fileExists($target) || $this->storage->directoryExists($target); ++$n) {
+            $extension = pathinfo($name, \PATHINFO_EXTENSION);
+            $target = ltrim($directory.'/'.pathinfo($name, \PATHINFO_FILENAME).' ('.$n.')'.('' !== $extension ? '.'.$extension : ''), '/');
         }
 
         return $target;
@@ -534,9 +567,11 @@ class FileShare
      *
      * @return string its new path
      * @throws \InvalidArgumentException into itself, or onto something already there
+     * @throws LockedException out of a folder the retention lock keeps
      */
     public function move(string $from, string $toDirectory, ?string $name = null): string
     {
+        $this->retention?->guardTree($from);
         $name = null !== $name ? self::name($name) : basename($from);
         $to = ltrim($toDirectory.'/'.$name, '/');
         if ('' === $from || '' === $name || $to === $from) {
@@ -592,9 +627,17 @@ class FileShare
         return $directories;
     }
 
-    /** A file from a stream (drive:import), its folders made on the way; what is there already is replaced. */
+    /**
+     * A file from a stream (drive:import, the bundles filing into the drive), its folders made on
+     * the way; what is there already is replaced - unless the retention lock keeps it.
+     *
+     * @throws LockedException over a file the retention lock keeps
+     */
     public function write(string $path, $stream): void
     {
+        if ($this->storage->fileExists($path)) {
+            $this->retention?->guard($path);
+        }
         $this->storage->writeStream($path, $stream);
     }
 
@@ -612,12 +655,17 @@ class FileShare
         return $bytes;
     }
 
-    /** A file, or a folder and all it holds - and what was said of them. */
+    /**
+     * A file, or a folder and all it holds - and what was said of them.
+     *
+     * @throws LockedException in a folder the retention lock keeps
+     */
     public function delete(string $path): void
     {
         if ('' === $path) {
             throw new \InvalidArgumentException('The drive itself is not deleted.');
         }
+        $this->retention?->guardTree($path);
         if ($this->storage->directoryExists($path)) {
             $this->storage->deleteDirectory($path);
         } else {

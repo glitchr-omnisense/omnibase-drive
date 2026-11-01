@@ -75,7 +75,9 @@ Drive folder once connected ([Google Drive](google-drive.md)).
 ## The tables
 
 `sharedPath` (what the team says of a path), `sharedPathMember` (its people), `shareTask` (a
-workspace's tasks), `shareDownload` (download counts). The names are fixed (`#[ORM\Table]`): a site
+workspace's tasks), `shareDownload` (download counts), `shareGroup` and `shareGroupMember`,
+`sharedPathGroup`, `sharePersonalTag` (with `drive.personal_tags`), `shareRetention` (the retention
+log, with `drive.retention`). The names are fixed (`#[ORM\Table]`): a site
 that had its own copy of these entities keeps its tables and their rows. The people are accounts
 of `App\Entity\User`, as in the core's own entities. Generate the application's migration:
 

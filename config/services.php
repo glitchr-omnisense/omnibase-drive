@@ -8,7 +8,7 @@ use Base\Drive\Storage\DocumentsStorage;
 use League\Flysystem\FilesystemOperator;
 
 /*
- * Plain autowiring over src/, as omnibase/estate does. Entities and models are not services; the
+ * Plain autowiring over src/, as omnibase/estate does. Entities, models and the exception are not services; the
  * Google Drive connection (Storage\DriveClient and the back office's page) is loaded only when
  * google/apiclient is there, the back office's page only when omnibase/admin is too.
  */
@@ -29,6 +29,7 @@ return function (ContainerConfigurator $configurator) {
             $src.'/Entity/',
             $src.'/Model/',
             $src.'/Controller/',
+            $src.'/Share/LockedException.php',
             $src.'/DriveBundle.php',
         ]);
 

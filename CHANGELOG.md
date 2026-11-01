@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 ### Added
+- Files shared on upload with named people: each person's space (`Space\Spaces`), where a bundle
+  says (`Space\SpaceProviderInterface`, autoconfigured `drive.space`, the first to answer wins),
+  otherwise `drive.spaces_root/<name>` (`Spaces` by default), made if missing, reused otherwise,
+  shared with them read only. `ShareController`'s upload takes `share_with[]` (user ids,
+  `group:<id>`) and `share_deposit` from the team: a copy of each file in each one's space (a
+  group's: each of its people's), never over what is there; the flash `share.flash.delivered`.
+  `FileShare::copy()`. The page gets `people` and `share_groups` for it; the bundle's page offers it.
+- The retention lock, `drive.retention` (false by default) and `drive.retention_role`
+  (`ROLE_SUPERADMIN`): nothing kept is deleted, overwritten, renamed nor moved, by anyone -
+  `FileShare::delete()`, `move()` and `write()` over a file throw `Share\LockedException`, the
+  commands too (`drive:move` fails, `drive:import` replaces nothing); `ShareVoter`'s `SHARE_ALTER`
+  (the staff, unless locked) and `SHARE_RETAIN` (the superadmin). The superadmin lifts it per
+  folder - until put back, for a while, until a date - and puts it back (`retention_lift`,
+  `retention_lock`, a reason required), each logged in `Entity\RetentionEvent` (table
+  `shareRetention`, only ever added to); a lift whose time is up is a lock again when read
+  (`Share\Retention`, on the application's clock when there is one). The page gets `retention`,
+  `locked`, `lift`, `retain`, `retention_log` and each entry's `locked`; the words
+  `share.retention.*`, `share.upload_share.*`, `share.flash.locked`, `lifted`, `relocked`,
+  `retention_invalid` (fr, en). `psr/clock` required.
 - Groups of people to share with at once - a flatshare's tenants, a couple, heirs:
   `Entity\ShareGroup` (tables `shareGroup`, `shareGroupMember`), `SharedPath::$groups`
   (`sharedPathGroup`), `FileShare::shareWithGroup()`; whoever is in a group shared with a folder is
