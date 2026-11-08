@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- Accepts omnisense/omnibase 5.0 (`3.x-dev || 4.0.*-dev || 5.0.*-dev`; plan "omnibase agnostic", step S): the bundle runs
+  unchanged on it, `Base\Bundle\AbstractBaseBundle` and `AbstractBaseExtension` being aliases of
+  omnibridge/symfony's classes there; omnibridge/symfony 1.x is required, as by the other bundles, since
+  the bundle's parents are its classes on 5.0. The sites on 4.x resolve as before.
+
 ### Added
 - Files shared on upload with named people: each person's space (`Space\Spaces`), where a bundle
   says (`Space\SpaceProviderInterface`, autoconfigured `drive.space`, the first to answer wins),
