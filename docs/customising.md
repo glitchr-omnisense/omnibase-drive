@@ -74,7 +74,7 @@ missing and shared with them; null for someone who is none of its people. Autoco
 (`Indivisions/<ownership>`).
 
 The page gets `people` and `share_groups` to offer on upload (`share_with[]`, `share_deposit`, on
-the upload form - meyers ties its checkboxes to it with `form="..."`, and its drop controller sends
+the upload form - a site ties its checkboxes to it with `form="..."`, and its drop controller sends
 them with each file dropped).
 
 ## Its retention lock

@@ -20,7 +20,7 @@ composer install && vendor/bin/phpunit
 Inside a host's container, with its vendor (`/srv/app/vendor`, or `DRIVE_AUTOLOAD`):
 
 ```bash
-docker exec -w /srv/omnibase/drive meyers-web-1 php /srv/app/vendor/bin/phpunit --do-not-cache-result
+docker exec -w /srv/omnibase/drive <site>-web-1 php /srv/app/vendor/bin/phpunit --do-not-cache-result
 ```
 
-The pages are proven by the sites' functional tests (meyers' `tests/Functional/ShareTest.php`).
+The pages are proven by the sites' functional tests (for one, a site's `tests/Functional/ShareTest.php`).

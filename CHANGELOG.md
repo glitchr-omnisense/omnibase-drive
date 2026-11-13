@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-13
+
+First stable release.
+
+### Changed
+- Stable requirements, so that `composer require omnibase/drive` installs at Packagist's default stability:
+  `omnisense/omnibase` ^5.1 (in place of `3.x || 4.0 || 5.0` dev branches), `omnibridge/symfony` ^1.1;
+  no `minimum-stability: dev`; the branch alias `dev-main` → `1.x-dev`.
+- CI: `.github/workflows/ci.yml` (glitchr-studio/ci's php-package workflow, pinned: the bundle installed alone,
+  composer validate, PHPUnit, a consumer install without require-dev with `src/` linted and the bundle class
+  autoloaded) and `release.yml` (that CI on a tag, then the release).
+- Neutral example data in docs and tests.
+
 ### Changed
 - Accepts omnisense/omnibase 5.0 (`3.x-dev || 4.0.*-dev || 5.0.*-dev`; plan "omnibase agnostic", step S): the bundle runs
   unchanged on it, `Base\Bundle\AbstractBaseBundle` and `AbstractBaseExtension` being aliases of
@@ -51,7 +64,7 @@
   `tag_remove` (who sees it kept) and `tag_color`; a tag's colour, `Share\TagColors` (the one chosen,
   under the setting `app.drive.tag_colors`, otherwise one of eight drawn from its key), and the Twig
   function `drive_tag_color()`. Renaming the folder one is in leads to it under its new name.
-- The drive, out of the copies meyers and glitchr each had (« le Partage », « Cloud »), their
+- The drive, out of the copies two sites each had (« le Partage », « Cloud »), their
   union in one place: `Share\FileShare` (paths, listing, audiences and tags by inheritance, listed,
   each person's own root - `tops()` -, the search through the tree - `search()`, case and accents
   aside -, sharing by name - `shareWith()`, `isSharedWith()` -, workspaces, upload, move, delete,

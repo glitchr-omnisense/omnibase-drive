@@ -78,7 +78,7 @@ final class FileShareTest extends DriveTestCase
     {
         $this->storage->write('Locataires/Léa/bail.pdf', 'x');
         $this->storage->write('Locataires/Paul/bail.pdf', 'x');
-        $this->storage->createDirectory('Biens/Krutenau');
+        $this->storage->createDirectory('Biens/A');
 
         $tops = $this->share()->tops(fn (string $path) => str_starts_with($path, 'Locataires/Léa') || str_starts_with($path, 'Biens'));
 

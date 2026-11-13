@@ -29,12 +29,12 @@ final class SpacesTest extends DriveTestCase
         $lea = $this->user(4, 'lea');
         $tom = $this->user(5, 'tom');
         $ines = $this->user(6, 'ines');
-        $flat = (new ShareGroup('Colocation Krutenau'))->addMember($tom)->addMember($ines);
-        $this->storage->write('Biens/Krutenau/DPE.pdf', '%PDF dpe');
-        $this->storage->write('Biens/Krutenau/Règlement.pdf', '%PDF règlement');
+        $flat = (new ShareGroup('Colocation A'))->addMember($tom)->addMember($ines);
+        $this->storage->write('Biens/A/DPE.pdf', '%PDF dpe');
+        $this->storage->write('Biens/A/Règlement.pdf', '%PDF règlement');
         $spaces = new Spaces($this->share, [$this->tenants(['lea' => 'Locataires/Léa Muller'])], 'Espaces');
 
-        $copies = $spaces->deliver('Biens/Krutenau/DPE.pdf', [$lea, $flat]);
+        $copies = $spaces->deliver('Biens/A/DPE.pdf', [$lea, $flat]);
 
         self::assertSame([
             'Locataires/Léa Muller/DPE.pdf' => 'Locataires/Léa Muller',
@@ -42,7 +42,7 @@ final class SpacesTest extends DriveTestCase
             'Espaces/ines/DPE.pdf' => 'Espaces/ines',
         ], $copies, 'the provider\'s space for the one it knows, the drive\'s own place for the others, each of the group\'s people');
         self::assertSame('%PDF dpe', $this->storage->read('Espaces/tom/DPE.pdf'));
-        self::assertTrue($this->storage->fileExists('Biens/Krutenau/DPE.pdf'), 'the file stays where it was added');
+        self::assertTrue($this->storage->fileExists('Biens/A/DPE.pdf'), 'the file stays where it was added');
         foreach (['Locataires/Léa Muller' => $lea, 'Espaces/tom' => $tom, 'Espaces/ines' => $ines] as $space => $user) {
             self::assertTrue($this->share->isSharedWith($space.'/DPE.pdf', $user), $space.' is shared with its person');
             self::assertFalse($this->share->row($space)->allowsDeposit(), 'read only');
@@ -52,12 +52,12 @@ final class SpacesTest extends DriveTestCase
 
         // Again, with another file and the same people: the same spaces, nothing made twice.
         $before = $this->share->directories();
-        $copies = $spaces->deliver('Biens/Krutenau/Règlement.pdf', [$tom, $flat, $lea]);
+        $copies = $spaces->deliver('Biens/A/Règlement.pdf', [$tom, $flat, $lea]);
         self::assertSame(['Espaces/tom/Règlement.pdf', 'Espaces/ines/Règlement.pdf', 'Locataires/Léa Muller/Règlement.pdf'], array_keys($copies), 'each person once, however often named');
         self::assertSame($before, $this->share->directories(), 'the spaces reused');
 
         // The same file a second time: beside the first, never over it.
-        self::assertSame(['Espaces/tom/DPE (2).pdf'], array_keys($spaces->deliver('Biens/Krutenau/DPE.pdf', [$tom])));
+        self::assertSame(['Espaces/tom/DPE (2).pdf'], array_keys($spaces->deliver('Biens/A/DPE.pdf', [$tom])));
     }
 
     public function testTheUploaderLetsThemBringFilesAndAFileInTheirSpaceIsNotCopiedThere(): void

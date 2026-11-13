@@ -5,7 +5,7 @@
 // used, and the test namespace is registered by hand - a host's autoloader
 // never reads a dependency's autoload-dev.
 // DRIVE_AUTOLOAD or /srv/app/vendor/autoload.php: a host's vendor mounted elsewhere (the checkout
-// run in meyers' container, as omnibase/estate's tests are).
+// run in a site's container, as omnibase/estate's tests are).
 foreach (array_filter([getenv('DRIVE_AUTOLOAD') ?: null, __DIR__.'/../vendor/autoload.php', __DIR__.'/../../../autoload.php', '/srv/app/vendor/autoload.php']) as $candidate) {
     if (is_file($candidate)) {
         $loader = require $candidate;
