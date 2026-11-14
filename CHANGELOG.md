@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-14
+
+### Changed
+
+- The classes omnisense/omnibase 5.0 moved to omnibridge/symfony named by their new names:
+  `Omnibridge\Symfony\Omnibase\Bundle\{AbstractBaseBundle, AbstractBaseExtension}` in place of
+  `Base\Bundle\*`, former names 6.0 removed; docs/installation.md registers
+  `Omnibridge\Symfony\Omnibase\BaseBundle`. No behaviour change.
+- Accepts omnisense/omnibase 6.0: `omnisense/omnibase` ^5.1 || ^6.0, `omnibridge/symfony` ^1.1 || ^2.0. The
+  same code runs on both lines: it names no former name and no entry point 6.0 removed.
+
 ## [1.0.0] — 2026-11-13
 
 First stable release.

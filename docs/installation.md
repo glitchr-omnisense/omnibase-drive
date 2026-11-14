@@ -15,7 +15,7 @@ composer require omnibase/drive
 // config/bundles.php
 return [
     // ...
-    Base\BaseBundle::class => ['all' => true],
+    Omnibridge\Symfony\Omnibase\BaseBundle::class => ['all' => true],
     Base\Drive\DriveBundle::class => ['all' => true],
 ];
 ```

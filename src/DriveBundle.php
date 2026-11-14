@@ -2,7 +2,7 @@
 
 namespace Base\Drive;
 
-use Base\Bundle\AbstractBaseBundle;
+use Omnibridge\Symfony\Omnibase\Bundle\AbstractBaseBundle;
 use Base\Traits\SingletonTrait;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
