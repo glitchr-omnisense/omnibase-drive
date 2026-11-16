@@ -15,7 +15,7 @@ use Base\Drive\Repository\SharedPathRepository;
 use Base\Drive\Share\FileShare;
 use Base\Drive\Share\Retention;
 use Base\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use League\Flysystem\Filesystem;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use PHPUnit\Framework\TestCase;
@@ -53,7 +53,7 @@ abstract class DriveTestCase extends TestCase
         $downloads = $this->createStub(ShareDownloadRepository::class);
         $downloads->method('counts')->willReturn([]);
 
-        return new FileShare($this->storage, $paths, $this->entityManager(), $downloads, $defaultAudience, null, $retention);
+        return new FileShare($this->storage, $paths, $this->unitOfWork(), $downloads, $defaultAudience, null, $retention);
     }
 
     /** The retention lock over the log in memory, on unless said otherwise, by $clock's time when given. */
@@ -62,13 +62,13 @@ abstract class DriveTestCase extends TestCase
         $log = $this->createStub(RetentionEventRepository::class);
         $log->method('log')->willReturnCallback(fn () => $this->events);
 
-        return new Retention($log, $this->entityManager(), $enabled, 'ROLE_SUPERADMIN', $clock);
+        return new Retention($log, $this->unitOfWork(), $enabled, 'ROLE_SUPERADMIN', $clock);
     }
 
     /** What is persisted is kept in memory: a path's row in $rows, a line of the log in $events. */
-    protected function entityManager(): EntityManagerInterface
+    protected function unitOfWork(): UnitOfWork
     {
-        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManager = $this->createStub(UnitOfWork::class);
         $entityManager->method('persist')->willReturnCallback(function (object $entity): void {
             if ($entity instanceof SharedPath) {
                 $this->rows[$entity->getPath()] = $entity;

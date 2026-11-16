@@ -5,7 +5,7 @@ namespace Base\Drive\Entity;
 use Base\Entity\User;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * A group of people the team names - a flatshare's tenants, a couple, a family's heirs - to share

@@ -2,7 +2,7 @@
 
 namespace Base\Drive\People;
 
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Database\Repository\Repositories;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class AccountPeople implements PeopleInterface
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly Repositories $repositories,
         #[Autowire('%drive.user_class%')] private readonly string $userClass = 'App\Entity\User',
     ) {
     }
@@ -20,7 +20,7 @@ final class AccountPeople implements PeopleInterface
     public function grouped(): array
     {
         $accounts = [];
-        foreach ($this->entityManager->getRepository($this->userClass)->findAll() as $user) {
+        foreach ($this->repositories->of($this->userClass)->findAll() as $user) {
             $email = method_exists($user, 'getEmail') ? $user->getEmail() : null;
             $accounts[$user->getId()] = $user->getUserIdentifier().($email ? ' · '.$email : '');
         }

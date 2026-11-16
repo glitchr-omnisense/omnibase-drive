@@ -8,7 +8,7 @@ use Base\Drive\Entity\SharedPath;
 use Base\Drive\Repository\ShareDownloadRepository;
 use Base\Drive\Repository\SharedPathRepository;
 use Base\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\StorageAttributes;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -52,7 +52,7 @@ class FileShare
     public function __construct(
         #[Autowire(service: 'documents.storage')] private readonly FilesystemOperator $storage,
         private readonly SharedPathRepository $paths,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly ShareDownloadRepository $downloads,
         #[Autowire('%drive.default_audience%')] private readonly string $defaultAudience = 'staff',
         private readonly ?PersonalTags $personal = null,
@@ -360,8 +360,8 @@ class FileShare
     {
         $row = $this->downloads->findOneBy(['path' => $path]) ?? new ShareDownload($path);
         $row->setCount($count);
-        $this->entityManager->persist($row);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($row);
+        $this->unitOfWork->flush();
         $this->counts = null;
     }
 
@@ -392,7 +392,7 @@ class FileShare
         $listed = 'keep' === $listed ? $row?->isListed() : $listed;
         if (null === $audience && null === $description && [] === $tags && null === $listed && !$row?->isWorkspace()) {
             if ($row) {
-                $this->entityManager->remove($row);
+                $this->unitOfWork->remove($row);
             }
         } else {
             $row ??= new SharedPath($path);
@@ -401,9 +401,9 @@ class FileShare
             $row->setDescription($description);
             $row->setTags($tags);
             $row->setListed($listed);
-            $this->entityManager->persist($row);
+            $this->unitOfWork->persist($row);
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->rows = null;
     }
 
@@ -484,8 +484,8 @@ class FileShare
         }
         $this->storage->createDirectory($path);
         $row = (new SharedPath($path, $audience))->setDescription($description)->setWorkspace(true);
-        $this->entityManager->persist($row);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($row);
+        $this->unitOfWork->flush();
         $this->rows = null;
 
         return $path;
@@ -521,8 +521,8 @@ class FileShare
         if (null !== $deposit) {
             $row->setDeposit($deposit);
         }
-        $this->entityManager->persist($row);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($row);
+        $this->unitOfWork->flush();
         $this->rows = null;
     }
 
@@ -535,8 +535,8 @@ class FileShare
         if (null !== $deposit) {
             $row->setDeposit($deposit);
         }
-        $this->entityManager->persist($row);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($row);
+        $this->unitOfWork->flush();
         $this->rows = null;
     }
 
@@ -556,8 +556,8 @@ class FileShare
                 $row->removeTask($task);
             }
         }
-        $this->entityManager->persist($row);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($row);
+        $this->unitOfWork->flush();
         $this->rows = null;
     }
 
@@ -600,11 +600,8 @@ class FileShare
         foreach ($this->paths->findUnder($from) as $row) {
             $row->setPath($to.substr($row->getPath(), \strlen($from)));
         }
-        $this->entityManager->flush();
-        $this->entityManager->getConnection()->executeStatement(
-            'UPDATE shareDownload SET path = CONCAT(:to, SUBSTRING(path, :length + 1)) WHERE path = :from OR path LIKE :under',
-            ['to' => $to, 'length' => \strlen($from), 'from' => $from, 'under' => addcslashes($from, '%_').'/%'],
-        );
+        $this->unitOfWork->flush();
+        $this->downloads->moveUnder($from, $to);
         $this->personal?->moved($from, $to);
         $this->rows = null;
         $this->counts = null;
@@ -672,9 +669,9 @@ class FileShare
             $this->storage->delete($path);
         }
         foreach ($this->paths->findUnder($path) as $row) {
-            $this->entityManager->remove($row);
+            $this->unitOfWork->remove($row);
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->downloads->deleteUnder($path);
         $this->personal?->deleted($path);
         $this->rows = null;

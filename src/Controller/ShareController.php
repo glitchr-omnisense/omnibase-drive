@@ -15,7 +15,9 @@ use Base\Drive\Share\Retention;
 use Base\Drive\Share\TagColors;
 use Base\Drive\Space\Spaces;
 use Base\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Database\Repository\Entities;
+use Base\Database\Repository\Repositories;
+use Base\Contract\UnitOfWork;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -60,7 +62,8 @@ class ShareController extends AbstractController
     public function __construct(
         private readonly FileShare $share,
         private readonly TranslatorInterface $translator,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
+        private readonly Repositories $repositories,
         private readonly PeopleInterface $people,
         private readonly Audiences $audiences,
         private readonly TagColors $tagColors,
@@ -218,7 +221,7 @@ class ShareController extends AbstractController
             // A workspace's people by their names, not their identifiers.
             'names' => $workspace || $this->isGranted(ShareVoter::MANAGE) ? $this->people->names() : [],
             // The groups of people the team named, to share with and to fill.
-            'share_groups' => $browse && $this->isGranted(ShareVoter::MANAGE) ? $this->entityManager->getRepository(ShareGroup::class)->findBy([], ['name' => 'ASC']) : [],
+            'share_groups' => $browse && $this->isGranted(ShareVoter::MANAGE) ? $this->repositories->of(ShareGroup::class)->findBy([], ['name' => 'ASC']) : [],
             // The retention lock (drive.retention): whether this folder is kept, the lift it is open by,
             // and for the superadmin the right to lift and put it back, and the log.
             'retention' => $this->retention->enabled(),
@@ -424,7 +427,7 @@ class ShareController extends AbstractController
                 $workspace = $this->share->workspace($path);
                 if ($workspace && $workspace->getPath() === $path) {
                     $workspace->setDeposit($request->request->getBoolean('deposit'));
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
             case 'member_add':
@@ -433,7 +436,7 @@ class ShareController extends AbstractController
                 $workspace = $this->share->workspace($path);
                 if ($user instanceof User && $workspace) {
                     $workspace->addMember($user);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 } else {
                     $this->addFlash('warning', $this->trans('share.flash.no_member', ['who' => $who]));
                 }
@@ -443,14 +446,14 @@ class ShareController extends AbstractController
                 $user = $this->users()->find((int) $request->request->get('member'));
                 if ($workspace && $user instanceof User) {
                     $workspace->removeMember($user);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
             case 'group_unshare':
                 $workspace = $this->share->workspace($path);
                 if ($workspace && ($group = $this->group($request->request->get('group')))) {
                     $workspace->removeGroup($group);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
             // The groups of people (a flatshare, a couple...): named, filled, emptied, gone - the team's.
@@ -463,8 +466,8 @@ class ShareController extends AbstractController
                             $group->addMember($user);
                         }
                     }
-                    $this->entityManager->persist($group);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->persist($group);
+                    $this->unitOfWork->flush();
                     $this->addFlash('success', $this->trans('share.flash.group_created', ['name' => $group->getName()]));
                 }
                 break;
@@ -472,7 +475,7 @@ class ShareController extends AbstractController
                 $name = trim((string) $request->request->get('name'));
                 if ('' !== $name && ($group = $this->group($request->request->get('group')))) {
                     $group->setName(mb_substr($name, 0, 120));
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
             case 'group_member_add':
@@ -480,16 +483,16 @@ class ShareController extends AbstractController
                 $user = $this->users()->find((int) $request->request->get('member'));
                 if (($group = $this->group($request->request->get('group'))) && $user instanceof User) {
                     'group_member_add' === $action ? $group->addMember($user) : $group->removeMember($user);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
             case 'group_delete':
                 if ($group = $this->group($request->request->get('group'))) {
-                    foreach ($this->entityManager->createQuery(sprintf('SELECT p FROM %s p JOIN p.groups g WHERE g = :group', \Base\Drive\Entity\SharedPath::class))->setParameter('group', $group)->getResult() as $shared) {
+                    foreach ($this->repositories->of(\Base\Drive\Entity\SharedPath::class)->findBy(['groups' => $group]) as $shared) {
                         $shared->removeGroup($group);
                     }
-                    $this->entityManager->remove($group);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->remove($group);
+                    $this->unitOfWork->flush();
                 }
                 break;
             case 'task_add':
@@ -498,7 +501,7 @@ class ShareController extends AbstractController
                 if ($workspace && '' !== $title) {
                     $user = $this->getUser();
                     $workspace->addTask((new ShareTask($title, $user instanceof User ? $user : null))->setPosition($workspace->getTasks()->count()));
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
             case 'task_toggle':
@@ -507,7 +510,7 @@ class ShareController extends AbstractController
                 $task = $workspace?->getTasks()->filter(fn (ShareTask $t) => $t->getId() === (int) $request->request->get('task'))->first();
                 if ($task) {
                     'task_toggle' === $action ? $task->toggle() : $workspace->removeTask($task);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                 }
                 break;
         }
@@ -562,15 +565,15 @@ class ShareController extends AbstractController
         return $user instanceof User ? $user : null;
     }
 
-    /** @return \Doctrine\Persistence\ObjectRepository<User> the accounts (drive.user_class) */
     private function group(mixed $id): ?ShareGroup
     {
-        return is_numeric($id) ? $this->entityManager->find(ShareGroup::class, (int) $id) : null;
+        return is_numeric($id) ? $this->repositories->oneById(ShareGroup::class, (int) $id) : null;
     }
 
-    private function users(): \Doctrine\Persistence\ObjectRepository
+    /** @return Entities<User> the accounts (drive.user_class) */
+    private function users(): Entities
     {
-        return $this->entityManager->getRepository($this->userClass);
+        return $this->repositories->of($this->userClass);
     }
 
     /** An account by its identifier or its e-mail. */
@@ -579,9 +582,8 @@ class ShareController extends AbstractController
         if ('' === $who) {
             return null;
         }
-        $metadata = $this->entityManager->getClassMetadata($this->userClass);
         foreach (['username', 'email'] as $field) {
-            if ($metadata->hasField($field) && ($user = $this->users()->findOneBy([$field => $who])) instanceof User) {
+            if (property_exists($this->userClass, $field) && ($user = $this->users()->findOneBy([$field => $who])) instanceof User) {
                 return $user;
             }
         }

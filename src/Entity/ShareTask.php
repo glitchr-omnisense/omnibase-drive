@@ -3,7 +3,7 @@
 namespace Base\Drive\Entity;
 
 use Base\Entity\User;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * A task of a workspace of the drive (SharedPath::$tasks): a few words, done or

@@ -5,7 +5,7 @@ namespace Base\Drive\Share;
 use Base\Drive\Entity\RetentionEvent;
 use Base\Drive\Repository\RetentionEventRepository;
 use Base\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -30,7 +30,7 @@ class Retention
 
     public function __construct(
         private readonly RetentionEventRepository $repository,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         #[Autowire('%drive.retention%')] private readonly bool $enabled = false,
         #[Autowire('%drive.retention_role%')] private readonly string $role = 'ROLE_SUPERADMIN',
         private readonly ?ClockInterface $clock = null,
@@ -160,8 +160,8 @@ class Retention
 
     private function record(RetentionEvent $event): RetentionEvent
     {
-        $this->entityManager->persist($event);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($event);
+        $this->unitOfWork->flush();
         $this->events = $this->latest = null;
 
         return $event;

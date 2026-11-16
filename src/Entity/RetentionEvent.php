@@ -4,7 +4,7 @@ namespace Base\Drive\Entity;
 
 use Base\Drive\Repository\RetentionEventRepository;
 use Base\Entity\User;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * One line of the retention log (drive.retention, Base\Drive\Share\Retention): a folder's lock

@@ -2,39 +2,61 @@
 
 namespace Base\Drive\Repository;
 
+use Base\Database\Exception\UniqueConstraintViolation;
+use Base\Database\Repository\Finder\Change;
 use Base\Drive\Entity\ShareDownload;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finders;
+use Base\Database\Repository\ServiceEntityRepository;
 
-/** @extends ServiceEntityRepository<ShareDownload> */
+/**
+ * The downloads of the shared paths: counted, renamed and deleted in the database (updateBy(), deleteBy()),
+ * at once, whatever else is counting at the same time; read by a finder.
+ *
+ * @method ShareDownload|null find($id, $lockMode = null, $lockVersion = null)
+ * @method ShareDownload|null findOneBy(array $criteria, ?array $orderBy = null)
+ * @method ShareDownload[]    findAll()
+ * @method ShareDownload[]    findBy(array $criteria, ?array $orderBy = null, $limit = null, $offset = null)
+ */
 class ShareDownloadRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, ShareDownload::class);
+        parent::__construct($finders, ShareDownload::class);
     }
 
-    /** One more download of a path: in one statement, whatever else is counting at the same time. */
+    /**
+     * One more download of a path: the row's counter added to in the database; the first download of a path makes
+     * its row (another request making it at the same moment: counted on that one).
+     */
     public function increment(string $path): void
     {
-        $this->getEntityManager()->getConnection()->executeStatement(
-            'INSERT INTO shareDownload (path, count, lastAt) VALUES (:path, 1, NOW()) ON DUPLICATE KEY UPDATE count = count + 1, lastAt = NOW()',
-            ['path' => $path],
-        );
+        $counted = ['count' => Change::add(1), 'lastAt' => new \DateTimeImmutable()];
+        if (0 < $this->updateBy(['path' => $path], $counted)) {
+            return;
+        }
+        try {
+            $this->persist((new ShareDownload($path, 1))->setLastAt(new \DateTimeImmutable()), true);
+        } catch (UniqueConstraintViolation) {
+            $this->updateBy(['path' => $path], $counted);
+        }
     }
 
     /** @return array<string, int> every path's downloads */
     public function counts(): array
     {
-        return array_map('intval', array_column($this->getEntityManager()->getConnection()->fetchAllAssociative('SELECT path, count FROM shareDownload'), 'count', 'path'));
+        // The values as the database holds them now (increment() counts there, not on loaded entities).
+        return array_map('intval', array_column($this->findValuesBy(['path', 'count']), 'count', 'path'));
     }
 
-    /** The counts of a path and of everything under it: gone with it. */
+    /** The counts of a path and of everything under it: gone with it, at once. */
     public function deleteUnder(string $path): void
     {
-        $this->getEntityManager()->getConnection()->executeStatement(
-            'DELETE FROM shareDownload WHERE path = :path OR path LIKE :under',
-            ['path' => $path, 'under' => addcslashes($path, '%_').'/%'],
-        );
+        $this->deleteBy([SharedPathRepository::under($path)]);
+    }
+
+    /** The counts of a path and of everything under it, under its new path, at once. */
+    public function moveUnder(string $from, string $to): void
+    {
+        $this->updateBy([SharedPathRepository::under($from)], ['path' => Change::replacePrefix($from, $to)]);
     }
 }

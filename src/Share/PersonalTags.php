@@ -4,7 +4,9 @@ namespace Base\Drive\Share;
 
 use Base\Drive\Entity\PersonalTag;
 use Base\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Database\Repository\Repositories;
+use Base\Drive\Repository\SharedPathRepository;
+use Base\Contract\UnitOfWork;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -20,7 +22,8 @@ final class PersonalTags
     private ?array $mine = null;
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
+        private readonly Repositories $repositories,
         private readonly Security $security,
         #[Autowire('%drive.personal_tags%')] private readonly bool $enabled = false,
     ) {
@@ -67,10 +70,10 @@ final class PersonalTags
             }
             $tag = new PersonalTag($user, $path, $name, $key);
             $tag->setColor($this->chosen($key));
-            $this->entityManager->persist($tag);
+            $this->unitOfWork->persist($tag);
             $have[] = $key;
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->mine = null;
     }
 
@@ -80,10 +83,10 @@ final class PersonalTags
         $keys = array_map(FileShare::tagKey(...), [...$names]);
         foreach ($this->mine()[$path] ?? [] as $tag) {
             if (\in_array($tag->getTagKey(), $keys, true)) {
-                $this->entityManager->remove($tag);
+                $this->unitOfWork->remove($tag);
             }
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->mine = null;
     }
 
@@ -105,7 +108,7 @@ final class PersonalTags
                 }
             }
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /** Everyone's tags under a path moved, under its new path. */
@@ -114,8 +117,11 @@ final class PersonalTags
         if (!$this->enabled) {
             return;
         }
-        $this->entityManager->createQuery(sprintf('UPDATE %s t SET t.path = CONCAT(:to, SUBSTRING(t.path, :start)) WHERE t.path = :from OR t.path LIKE :under', PersonalTag::class))
-            ->execute(['to' => $to, 'start' => \strlen($from) + 1, 'from' => $from, 'under' => addcslashes($from, '%_').'/%']);
+        // Read and changed in the unit of work (a bulk DQL UPDATE before: the same rows, written at once).
+        foreach ($this->under($from) as $tag) {
+            $tag->setPath($to.substr($tag->getPath(), \strlen($from)));
+        }
+        $this->unitOfWork->flush();
         $this->mine = null;
     }
 
@@ -125,9 +131,17 @@ final class PersonalTags
         if (!$this->enabled) {
             return;
         }
-        $this->entityManager->createQuery(sprintf('DELETE FROM %s t WHERE t.path = :path OR t.path LIKE :under', PersonalTag::class))
-            ->execute(['path' => $path, 'under' => addcslashes($path, '%_').'/%']);
+        foreach ($this->under($path) as $tag) {
+            $this->unitOfWork->remove($tag);
+        }
+        $this->unitOfWork->flush();
         $this->mine = null;
+    }
+
+    /** @return list<PersonalTag> everyone's tags of a path and of everything under it */
+    private function under(string $path): array
+    {
+        return $this->repositories->of(PersonalTag::class)->findBy([SharedPathRepository::under($path)]);
     }
 
     private function user(): ?User
@@ -156,7 +170,7 @@ final class PersonalTags
         if (null === $this->mine) {
             $this->mine = [];
             if ($user = $this->user()) {
-                foreach ($this->entityManager->getRepository(PersonalTag::class)->findBy(['user' => $user], ['id' => 'ASC']) as $tag) {
+                foreach ($this->repositories->of(PersonalTag::class)->findBy(['user' => $user], ['id' => 'ASC']) as $tag) {
                     $this->mine[$tag->getPath()][] = $tag;
                 }
             }

@@ -6,7 +6,7 @@ use Base\Drive\Repository\SharedPathRepository;
 use Base\Entity\User;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * What the team says of a folder or a file of the drive (Base\Drive\Share\FileShare): who it is

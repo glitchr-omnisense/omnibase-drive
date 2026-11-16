@@ -3,7 +3,7 @@
 namespace Base\Drive\Entity;
 
 use Base\Entity\User;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * A tag someone put on a folder for themselves (Base\Drive\Share\PersonalTags, drive.personal_tags):
@@ -48,6 +48,8 @@ class PersonalTag
     public function getId(): ?int { return $this->id; }
     public function getUser(): User { return $this->user; }
     public function getPath(): string { return $this->path; }
+    /** The folder moved: the tag follows it (PersonalTags::moved()). */
+    public function setPath(string $path): self { $this->path = $path; return $this; }
     public function getName(): string { return $this->name; }
     public function getTagKey(): string { return $this->tagKey; }
     public function getColor(): ?string { return $this->color; }

@@ -3,7 +3,7 @@
 namespace Base\Drive\Entity;
 
 use Base\Drive\Repository\ShareDownloadRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * How many times a file of the drive was downloaded (Base\Drive\Controller\ShareController) - or a
@@ -37,4 +37,5 @@ class ShareDownload
     public function getCount(): int { return $this->count; }
     public function setCount(int $count): self { $this->count = max(0, $count); return $this; }
     public function getLastAt(): ?\DateTimeImmutable { return $this->lastAt; }
+    public function setLastAt(?\DateTimeImmutable $lastAt): self { $this->lastAt = $lastAt; return $this; }
 }
