@@ -14,7 +14,7 @@ own styles and Stimulus controllers.
 ## Requirements
 
 - PHP 8.2+, `doctrine/orm` 2.15 or 3, `doctrine/doctrine-bundle`
-- `omnisense/omnibase` 5.1 or later (5.x), `omnibridge/symfony` 1.1 or later, `league/flysystem` 3 with `league/flysystem-bundle`
+- `omnisense/omnibase` 7.0 or later (7.x), `omnibridge/symfony` 3.0 or later, `league/flysystem` 3 with `league/flysystem-bundle`
 - Symfony 7 or 8 (`config`, `console`, `dependency-injection`, `http-kernel`, `mime`, `security-bundle`, `string`)
 - Suggested: `google/apiclient` and `masbug/flysystem-google-drive-ext` (the files on the site's
   Google Drive), `omnibase/admin` (the back office's Google Drive page), `ext-zip`, `ext-intl`
