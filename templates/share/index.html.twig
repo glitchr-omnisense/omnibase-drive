@@ -19,9 +19,9 @@
 {% block title %}{{ path ? (path|split('/')|last) ~ ' · ' : '' }}{{ '@messages.share.title'|trans }}{% endblock %}
 {% block description %}{{ row and row.description ? row.description : '@messages.share.lead'|trans }}{% endblock %}
 
-{% macro size(bytes) %}{% apply spaceless %}
-    {% if bytes is null %}—{% elseif bytes < 1024 %}{{ bytes }} o{% elseif bytes < 1048576 %}{{ (bytes / 1024)|round(1) }} Ko{% elseif bytes < 1073741824 %}{{ (bytes / 1048576)|round(1) }} Mo{% else %}{{ (bytes / 1073741824)|round(1) }} Go{% endif %}
-{% endapply %}{% endmacro %}
+{% macro size(bytes) -%}
+    {%- if bytes is null %}—{% elseif bytes < 1024 %}{{ bytes }} o{% elseif bytes < 1048576 %}{{ (bytes / 1024)|round(1) }} Ko{% elseif bytes < 1073741824 %}{{ (bytes / 1048576)|round(1) }} Mo{% else %}{{ (bytes / 1073741824)|round(1) }} Go{% endif -%}
+{%- endmacro %}
 
 {% block content %}
 {% import _self as drive %}
